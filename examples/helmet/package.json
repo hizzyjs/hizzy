@@ -1,0 +1,6 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@hizzyjs/helmet": "^1.0.1"
+  }
+}

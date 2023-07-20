@@ -1,0 +1,6 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@hizzyjs/images": "^1.0.1"
+  }
+}

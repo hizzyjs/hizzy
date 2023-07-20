@@ -1,0 +1,6 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@hizzyjs/language": "^1.0.1"
+  }
+}
