@@ -31,6 +31,8 @@ declare class CookieAuth extends EventEmitter {
 }
 
 declare class LocalAuthentication extends CookieAuth {
+    constructor(options?: CookieAuthOptions);
+
     login(request: AuthRequest, user: Object, pk?: boolean): Promise<boolean>;
 }
 
