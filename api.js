@@ -2,6 +2,7 @@
 
 const random = () => crypto.getRandomValues(new Uint32Array([0]))[0].toString(36); // todo: maybe get back to BigUint64?
 
+const crypto = require("crypto");
 const fs = require("fs");
 const https = require("https");
 const http = require("http");
@@ -58,7 +59,7 @@ const staticJSON = JSON.stringify(config?.static);
 // todo: cache file contents for the production mode
 // todo: variable transaction? like @server for variables? wouldn't work with literals. not sure if it's a good idea. they could just use currentClient.eval("variable") ? not sure if this works
 // todo: addon api for the socket messages etc.
-
+// todo: make a file hashmap(not sure if it's a good idea or even necessary)
 
 // todo: test it on mac and linux
 

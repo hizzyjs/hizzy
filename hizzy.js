@@ -10,6 +10,7 @@ global.__PRODUCT__ = "hizzy";
 global.__PRODUCT_U__ = "Hizzy";
 global.__VERSION__ = require("./package.json").version;
 const fs = require("fs");
+const crypto = require("crypto");
 const dotenv = require("dotenv");
 const path = require("path");
 const os = require("os");
@@ -92,10 +93,11 @@ const shortcuts = {
     "-f": "force"
 };
 optList.forEach(i => {
-    i = i.toLowerCase();
-    if (shortcuts[i]) i = "--" + shortcuts[i];
-    const sp = i.substring(2).split("=");
-    _argv_[sp[0]] = sp[1] ? sp.slice(1).join("=") || true : true;
+    const sp = i.split("=");
+    let f = sp[0].toLowerCase();
+    if (shortcuts[f]) f = "--" + shortcuts[f];
+    if (!f.startsWith("--")) return;
+    _argv_[f.substring(2)] = sp[1] ? sp.slice(1).join("=") || true : true;
 });
 Object.freeze(_argv_);
 self.args = _argv_;
@@ -289,7 +291,7 @@ if (isTerminal && args[0]) {
             }
         }
     }
-    if (typeof conf === "function") await conf({argv: _argv_, isDev: _argv_.dev});
+    if (typeof conf === "function") await conf({argv: _argv_, isDev: !!_argv_.dev});
     const ch = conf.checkConfig;
     const changedKeys = checkDefault(conf, DEFAULT_CONFIG);
     if (!_argv_.build && changedKeys.length && ch && confFileName.endsWith(".json")) {
@@ -365,7 +367,7 @@ if (isTerminal && args[0]) {
             }
         } else return exit("Config's 'conf.addons' property has to be an object or an array, got: " + type(conf.addons) + ".");
         await Hizzy.init();
-        if (_argv_.dev || conf.dev) {
+        if (conf.dev && (_argv_.dev === undefined || !["false", "no", "f", "n"].includes(_argv_.dev))) {
             Hizzy.dev = true;
             await Hizzy.processMain(Hizzy.jsxToJS(fs.readFileSync(mainPath), mainExtension));
         }

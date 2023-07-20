@@ -4,6 +4,7 @@
 // todo: facebook
 // todo: allowing custom, update: it kind of does now
 const {EventEmitter} = require("events");
+const crypto = require("crypto");
 
 class CookieAuth extends EventEmitter {
     #cookieName;
