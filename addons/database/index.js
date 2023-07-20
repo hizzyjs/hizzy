@@ -126,8 +126,8 @@ class NestedKeyDatabase {
         typeLs(value, ["string", "number", "object", "undefined"]);
         const [a, b] = this.__nested(key + "", false);
         if (!(b in a)) {
-            this.__updated = true;
             a[b] = [value];
+            this.__updated = true;
             return this;
         }
         if (typeof a[b] !== "object" || !Array.isArray(a[b])) throw new Error("Cannot push an element to a non-array at: " + key);
