@@ -1038,6 +1038,7 @@ class API extends EventEmitter {
         if (argv.debug) printer.inline.log("%c, debugging", "color: gray");
         printer.inline.print("\n");
         this.#sendURLs();
+        if (!stdin || !stdin.isTTY) return;
         printer.raw.log(`  %c➜%c  press %ch%c to show help\n`, "color: gray", "color: gray", "color: whiteBright", "color: gray");
         stdin.setRawMode(true);
         stdin.resume();
