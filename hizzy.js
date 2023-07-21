@@ -73,7 +73,7 @@ const checkDefault = (obj, def = {}, l = []) => {
     }
     return changed;
 };
-const propExpect = (prop, expect, got) => exit("The config file %c" + __PRODUCT__ + ".json%c's %c" + prop + "%c property was expected as: %c" + expect + "%c, got:%c", "color: orange", "color: red", "color: orange", "color: red", "color: orange", "color: red", "color: orange", got);
+// const propExpect = (prop, expect, got) => exit("The config file %c" + __PRODUCT__ + ".json%c's %c" + prop + "%c property was expected as: %c" + expect + "%c, got:%c", "color: orange", "color: red", "color: orange", "color: red", "color: orange", "color: red", "color: orange", got);
 const isTerminal = require.main === module;
 if (!isTerminal) exit(__PRODUCT_U__ + "'s module mode has not been developed yet. Its API can still be reached by importing/requiring '" + __PRODUCT__ + "/api'.");
 // todo
@@ -314,7 +314,7 @@ if (isTerminal && args[0]) {
         try {
             const got = require("@hizzyjs/types");
             const current = require("./package.json").version;
-            if (got !== current) printer.dev.warn(`The installed %c@hizzys/types@${got}&t's version don't match the version of%c hizzy@${current}&t`, "color: orange", "color: orange");
+            if (got !== current) printer.dev.warn(`The installed %c@hizzys/types@${got}&t's version don't match the version of%c hizzy@${current}&t, please consider updating. %cYou can disable this by setting 'warnAboutTypes' to false in config file.`, "color: orange", "color: orange", "color: gray");
         } catch (e) {
             printer.dev.warn("Please consider installing %c@hizzyjs/types&t to allow your IDE's intellisense to work properly. %cYou can disable this by setting 'warnAboutTypes' to false in config file.", "color: orange", "color: gray");
         }
