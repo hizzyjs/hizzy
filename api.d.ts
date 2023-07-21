@@ -123,15 +123,24 @@ declare class APIClass {
     Routes: RoutesComponent;
     socketServer;
     server;
+    app: Express;
     autoRefresh: boolean;
     dev: boolean;
     routes: Record<string, string>;
     customShortcuts: Record<string, Shortcut>;
-    app: Express;
     preRequests: Function[];
     preRawSend: Function[];
-    buildHandlers: Record<string, Function[]>;
-    scanHandlers: Record<string, Record<string, Function[]>>;
+    buildHandlers: Record<string, ((file: string, content: string, setContent: (content: string) => void, zip: any, extension: string, location: string[]) => any)[]>;
+    scanHandlers: Record<string, Record<string, ((location: string, data: string, files: Record<string, string>) => any)[]>>;
+    functionDecorators: Record<string, ((data: {
+        start: number,
+        end: number,
+        name: string,
+        leadingComments: { value: string }[],
+        code: string,
+        json: Object,
+        replaceText: (position: { start: number, end: number }, text: string) => void
+    }) => any)[]>;
 
     constructor(dir: string);
 

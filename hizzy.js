@@ -76,7 +76,8 @@ const checkDefault = (obj, def = {}, l = []) => {
 // const propExpect = (prop, expect, got) => exit("The config file %c" + __PRODUCT__ + ".json%c's %c" + prop + "%c property was expected as: %c" + expect + "%c, got:%c", "color: orange", "color: red", "color: orange", "color: red", "color: orange", "color: red", "color: orange", got);
 const isTerminal = require.main === module;
 if (!isTerminal) exit(__PRODUCT_U__ + "'s module mode has not been developed yet. Its API can still be reached by importing/requiring '" + __PRODUCT__ + "/api'.");
-// todo
+// todo ^
+
 let dir = process.cwd();
 let file;
 const args = argv.slice(2).filter(i => !i.startsWith("-"));
