@@ -1,3 +1,1 @@
-export default Hizzy.defineConfig({
-    port: 80
-});
+export default Hizzy.defineConfig();

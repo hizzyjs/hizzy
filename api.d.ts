@@ -58,6 +58,8 @@ type HizzyConfiguration = {
 type DefineConfigFunction<T> = (config: T) => T;
 
 declare class AddonModule {
+    constructor(pkg: Object, options: Object);
+
     get name(): string;
 
     get description(): string;
@@ -103,9 +105,9 @@ declare class Client {
 declare class Addon_ {
     static addons: Record<string, Addon_>;
 
-    static create(name: string, options: Object): Promise<Addon_>;
+    static create(name: string | AddonModule, options: Object): Promise<Addon_>;
 
-    constructor(name: string, options: Object);
+    constructor(name: string | AddonModule, options: Object);
 
     get options(): Object;
 

@@ -328,6 +328,16 @@ const fetchPage = async (p, push = true) => {
                 "hizzy-dest": "script"
             }
         })).text()).split("\u0000");
+        if (spl.length === 1) {
+            try {
+                const j = JSON.parse(spl[0]);
+                console.error(j.error || j);
+            } catch (e) {
+                console.error("Couldn't parse invalid JSON.");
+                console.error(e);
+            }
+            return;
+        }
         mainFile = JSON.parse(spl[0]);
         files = JSON.parse(spl.slice(1).join("\u0000"));
     }
