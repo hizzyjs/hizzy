@@ -8,7 +8,7 @@ type Method = "all" | "get" | "post" | "put" | "delete" | "patch" | "options" | 
 type SocketTraveler = string | number | null | SocketTraveler[] | {
     [key: string | number | symbol | null]: SocketTraveler
 };
-type onRequestFunction<T> = (request: Request, response: Response, next: (() => T)) => any;
+type onRequestFunction<T> = (request: Request, response: Response, next: ((...args: any[]) => T), ...args: any[]) => any;
 type RoutesComponent = (props: {}) => VNode<RouteComponent>;
 type RouteComponent = (props: {
     path: string | Location,
@@ -16,8 +16,8 @@ type RouteComponent = (props: {
     method?: Method,
     allow?: string[] | "*",
     deny?: string[] | "*",
-    // todo: a request event class, maybe a combination of request and response, i have no idea
-    onRequest?: onRequestFunction<Promise<void>> | onRequestFunction<void | Promise<void>>[]
+    // todo: a request event class, maybe a combination of request and response
+    onRequest?: onRequestFunction<void | Promise<void>>[]
 }) => VNode<RouteComponent> | void;
 
 type Shortcut = {
