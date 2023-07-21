@@ -29,7 +29,8 @@ class CookieAuth extends EventEmitter {
         if (pk && typeof req !== "string") return false;
         const token = crypto.randomUUID();
         this.tokens[token] = user;
-        this.emit("tokensUpdate");
+        this.emit("tokens.update");
+        this.emit("tokens.add", token, user);
         if (pk) await Hizzy.sendEvalTo(req, `document.cookie=${this.#cookieNameJ}+"=${token}"`);
         return token;
     };
@@ -45,7 +46,8 @@ class CookieAuth extends EventEmitter {
         if (pk && typeof uuid !== "string") return false;
         const token = Hizzy.getCookie(req.headers.cookie, this.#cookieName);
         delete this.tokens[token];
-        this.emit("tokensUpdate");
+        this.emit("tokens.update");
+        this.emit("tokens.remove", token);
         if (pk) await Hizzy.sendEvalTo(uuid, `document.cookie=${this.#cookieNameJ}+"=; expires=Thu, 01 Jan 1970 00:00:00 UTC;"`);
         return true;
     };

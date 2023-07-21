@@ -64,12 +64,19 @@ const staticJSON = JSON.stringify(config?.static);
 // todo: test it on mac and linux
 
 const runtimeId = random();
+const pack = s => {
+    return JSON.stringify(s); // todo: sophisticated packing; date, bigint, function or objects/arrays including these
+    // const t = typeof s;
+    // let l = s;
+    // if (t === "function") l = s.toString();
+    // return JSON.stringify([t, l]);
+};
 const EVERYONE = f => {
     if (!f["__FUNCTION__"]) throw new Error("EVERYONE function only allows client-sided functions!");
     return async (...a) => {
         const res = {};
         for (const uuid of Hizzy.clientUUIDs()) {
-            res[uuid] = await Hizzy.sendEvalTo(uuid, "__hizzy_run" + Hizzy.getHash(uuid) + "__[" + f["__FUNCTION__FILE_J__"] + "].normal." + f["__FUNCTION__"] + "(" + a.map(k => JSON.stringify(k)).join(",") + ")");
+            res[uuid] = await Hizzy.sendEvalTo(uuid, "__hizzy_run" + Hizzy.getHash(uuid) + "__[" + f["__FUNCTION__FILE_J__"] + "].normal." + f["__FUNCTION__"] + "(" + a.map(k => pack(k)).join(",") + ")");
         }
         return res;
     };
@@ -680,7 +687,7 @@ class API extends EventEmitter {
                     if (data[0] === CLIENT2SERVER.HANDSHAKE_RESPONSE) { // handshake finished
                         if (socket._handshook) return close("one handshake is enough");
                         socket._handshook = true;
-                        onPageLoad();
+                        // onPageLoad();
                         socket._send(SERVER2CLIENT.SURE_HANDSHAKE);
                         return;
                     }
@@ -1401,20 +1408,27 @@ class API extends EventEmitter {
         if (mainResponse.type !== Routes)
             return exit("Expected the 'export default' from the main file to be a Routes component!");
         const routes = {};
-        const makeRoute = async (s, u = "") => {
+        const makeRoute = async (s, u = {location: "", onRequest: [], allow: [], deny: []}) => {
             if (typeof s === "object" && !Array.isArray(s)) {
                 if (s.type !== Route)
                     return exit("Expected every child component of the Routes component to be a Route component!");
-                const p = path.join(u, s.props.path || "").replaceAll(path.sep, "/");
-                if (s.props.children) await makeRoute(s.props.children, p);
+                const p = path.join(u.location, s.props.path || "").replaceAll(path.sep, "/");
+                if (s.props.children) await makeRoute(s.props.children, {...u, location: p});
                 if (!s.props.path) return;
                 if (routes[p])
                     return exit("Cannot add multiple routes to the same endpoint: " + p);
                 const r = path.join(s.props.route || "");
-                let allow = s.props.allow;
+
+                let allow = u.allow === "*" ? "*" : s.props.allow;
                 if (allow === undefined) allow = "*";
-                let deny = s.props.deny;
+                if (allow === "*") u.allow = "*";
+                if (Array.isArray(allow)) u.allow = [...new Set([...u.allow, ...allow])];
+
+                let deny = u.deny === "*" ? "*" : s.props.deny;
                 if (deny === undefined) deny = [];
+                if (deny === "*") u.deny = "*";
+                if (Array.isArray(deny)) u.deny = [...new Set([...u.deny, ...deny])];
+
                 const msg = "Route '" + r + "'s 'allow' property is invalid, expected \"*\" or an array of strings, got: ";
                 if (typeof allow === "string") {
                     if (allow !== "*") return exit(msg, allow);
@@ -1457,9 +1471,9 @@ class API extends EventEmitter {
                 };
                 if (typeof onRequest === "function") onRequest(req, res, next);
                 else if (typeof onRequest === "object" && Array.isArray(onRequest)) {
-                    const r = i => {
+                    const r = (i, ...a) => {
                         if (i === onRequest.length) return next();
-                        onRequest[r](req, res, () => r(i + 1));
+                        onRequest[r](req, res, (...a) => r(i + 1, ...a), ...a);
                     };
                     await r(0);
                 } else await next();

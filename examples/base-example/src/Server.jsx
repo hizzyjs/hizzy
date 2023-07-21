@@ -1,3 +1,3 @@
 export default <Routes>
-    <Route path="/" route="./App.jsx" allow="*"/>
+    <Route path="/" route="./App.jsx"/>
 </Routes>;

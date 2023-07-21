@@ -28,6 +28,18 @@ declare class CookieAuth extends EventEmitter {
     hasAuthenticated(request: AuthRequest): boolean;
 
     getData(request: AuthRequest): string | undefined;
+
+    on(eventName: "tokens.update", listener: () => void): this;
+    on(eventName: "tokens.add", listener: (token: string, user: any) => void): this;
+    on(eventName: "tokens.remove", listener: (token: string) => void): this;
+
+    once(eventName: "tokens.update", listener: () => void): this;
+    once(eventName: "tokens.add", listener: (token: string, user: any) => void): this;
+    once(eventName: "tokens.remove", listener: (token: string) => void): this;
+
+    off(eventName: "tokens.update", listener: () => void): this;
+    off(eventName: "tokens.add", listener: (token: string, user: any) => void): this;
+    off(eventName: "tokens.remove", listener: (token: string) => void): this;
 }
 
 declare class LocalAuthentication extends CookieAuth {
