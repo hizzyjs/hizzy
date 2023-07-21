@@ -469,7 +469,7 @@ class API extends EventEmitter {
             }
             const r = i => {
                 if (i === this.preRequests.length) return next();
-                this.preRequests[r](req, res, () => r(i + 1));
+                this.preRequests[i](req, res, () => r(i + 1));
             };
             await r(0);
         });
@@ -1151,9 +1151,7 @@ class API extends EventEmitter {
                 process.exit();
             }
             const shortcut = shortcuts[c];
-            if (!shortcut || (cmdCooldown[c] || 0) + (shortcut.cooldown || 0) > Date.now()) return;
-            await this.waitBuild();
-            await this.waitBuildScanning();
+            if (!shortcut || !shortcut.enabled || (cmdCooldown[c] || 0) + (shortcut.cooldown || 0) > Date.now()) return;
             await cmdPromise;
             cmdPromise = (async () => {
                 await shortcut.run();
@@ -1439,6 +1437,7 @@ class API extends EventEmitter {
         };
         if (mainResponse.props.children) await makeRoute(mainResponse.props.children);
         this.routes = routes;
+        Object.freeze(routes);
         const METHODS = ["all", "get", "post", "put", "delete", "patch", "options", "head"];
         for (const url in this.routes) {
             const {route, method, routeJSON, allow, deny, onRequest} = this.routes[url];
