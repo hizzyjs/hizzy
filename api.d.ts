@@ -52,7 +52,8 @@ type HizzyConfiguration = {
         "preact"?: number,
         "preact-hooks"?: number,
         "static"?: Record<string, number>
-    }
+    },
+    warnAboutTypes?: boolean
 };
 type DefineConfigFunction<T> = (config: T) => T;
 
