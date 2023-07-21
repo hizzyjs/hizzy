@@ -310,7 +310,15 @@ if (isTerminal && args[0]) {
     Object.freeze(conf);
     self.config = conf;
 
-    if (!fs.existsSync(path.join(dir, "node_modules", "@hizzyjs/types"))) printer.dev.warn("Please consider installing %c@hizzyjs/types&t to allow your IDE's intellisense to work properly. %cYou can disable by setting 'warnAboutTypes' to false in config file.", "color: orange", "color: gray");
+    if (conf.warnAboutTypes) {
+        try {
+            const got = require("@hizzyjs/types");
+            const current = require("./package.json").version;
+            if (got !== current) printer.dev.warn(`The installed %c@hizzys/types@${got}&t's version don't match the version of%c hizzy@${current}&t`, "color: orange", "color: orange");
+        } catch (e) {
+            printer.dev.warn("Please consider installing %c@hizzyjs/types&t to allow your IDE's intellisense to work properly. %cYou can disable this by setting 'warnAboutTypes' to false in config file.", "color: orange", "color: gray");
+        }
+    }
     if (!_argv_.debug) {
         printer.options.disabledTags.push("debug");
         printer.dev.options.disabledTags.push("debug");

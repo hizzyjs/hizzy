@@ -54,6 +54,9 @@ declare module "hizzy/api" {${apiSpl[1]}}`
         .replaceAll("\n", "")
         .replaceAll("\r", "")
     );
+    const j = require("./types/package.json");
+    j.version = require("./package.json").version;
+    fs.writeFileSync("./types/package.json", JSON.stringify(j, null, 2));
 
     printer.dev = printer;
     global.__PRODUCT__ = "hizzy";
@@ -68,8 +71,6 @@ declare module "hizzy/api" {${apiSpl[1]}}`
             if (await request()) await run("cd ./addons/" + f + " && npm publish --access public");
         }
     }
-    process.stdout.write("Want to publish the types package? (y/n) ");
-    if (await request()) await run("cd types && npm publish --access public");
     process.stdout.write("Want to publish the package? (y/n) ");
-    if (await request()) await run("npm publish --access public");
+    if (await request()) await run("npm publish --access public && cd types && npm publish --access public");
 })();
