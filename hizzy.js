@@ -250,7 +250,8 @@ if (isTerminal && args[0]) {
             "preact": 0,
             "preact-hooks": 0,
             "static": {}
-        }
+        },
+        warnAboutTypes: true
         // todo: fix cache, it repeatedly refreshes the page for some reason, *sometimes*
     };
     let confFileName = _argv_.config;
@@ -309,6 +310,7 @@ if (isTerminal && args[0]) {
     Object.freeze(conf);
     self.config = conf;
 
+    if (!fs.existsSync(path.join(dir, "node_modules", "@hizzyjs/types"))) printer.dev.warn("Please consider installing %c@hizzyjs/types&t to allow your IDE's intellisense to work properly. %cYou can disable by setting 'warnAboutTypes' to false in config file.", "color: orange", "color: gray");
     if (!_argv_.debug) {
         printer.options.disabledTags.push("debug");
         printer.dev.options.disabledTags.push("debug");
