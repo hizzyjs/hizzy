@@ -26,8 +26,7 @@ import {
     toChildArray
 } from "preact";
 import {Inputs} from "preact/hooks";
-import {HizzyConfiguration as Conf} from "./api";
-
+import {HizzyConfiguration as Conf} from "./api"; /* ### TYPES ### */
 export function openPage(url: string): void;
 
 export function reloadPage(): void;

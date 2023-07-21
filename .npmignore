@@ -7,7 +7,7 @@ node_modules
 examples
 .gitignore
 .npmignore
-pb.js
+publish.js
 
 injections/jsx.js
 injections/html.js
@@ -16,3 +16,4 @@ api.js
 hizzy.js
 addons
 tests
+types

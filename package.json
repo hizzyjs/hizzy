@@ -1,7 +1,7 @@
 {
   "name": "hizzy",
   "description": "Hizzy is a React based modern web framework!",
-  "version": "0.0.53-beta",
+  "version": "0.0.54-beta",
   "main": "hizzy.min.js",
   "bin": {
     "hizzy": "./hizzy.min.js"
@@ -10,6 +10,7 @@
     "type": "git",
     "url": "https://github.com/hizzyjs/hizzy"
   },
+  "types": "./hizzy.d.ts",
   "keywords": [
     "framework",
     "fullstack",

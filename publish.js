@@ -23,10 +23,6 @@ const run = command => new Promise(r => {
         "./api.js",
         "./hizzy.js"
     ];
-    // steps of publish:
-    // node pb
-    // node hizzy --injections (exit after injection build being completed)
-    // npm publish
     files.forEach(i => {
         if (i.endsWith(".js")) {
             const min = require("uglify-js").minify(fs.readFileSync(i, "utf8"));
@@ -34,6 +30,30 @@ const run = command => new Promise(r => {
             fs.writeFileSync(i.replace(".js", ".min.js"), min.code);
         }
     });
+    const indexSpl = fs.readFileSync("./hizzy.d.ts", "utf8")
+        .replaceAll("\"preact", "\"react")
+        .replaceAll("VNode", "ReactNode")
+        .replaceAll("/hooks/src/index", "")
+        .replaceAll("/hooks", "")
+        .replaceAll(/\/\/[^\n]+/g, "")
+        .split("/* ### TYPES ### */");
+    fs.writeFileSync("./types/index.d.ts", `/*AUTO GENERATED FILE*/
+${indexSpl[0]}
+declare module "hizzy" {${indexSpl[1]}}`
+        .replaceAll("\n", "")
+        .replaceAll("\r", "")
+    );
+    const apiSpl = fs.readFileSync("./api.d.ts", "utf8")
+        .replaceAll("\"preact", "\"react")
+        .replaceAll("VNode", "ReactNode")
+        .replaceAll(/\/\/[^\n]+/g, "")
+        .split("/* ### TYPES ### */");
+    fs.writeFileSync("./types/api.d.ts", `/*AUTO GENERATED FILE*/
+${apiSpl[0]}
+declare module "hizzy/api" {${apiSpl[1]}}`
+        .replaceAll("\n", "")
+        .replaceAll("\r", "")
+    );
 
     printer.dev = printer;
     global.__PRODUCT__ = "hizzy";
@@ -48,6 +68,8 @@ const run = command => new Promise(r => {
             if (await request()) await run("cd ./addons/" + f + " && npm publish --access public");
         }
     }
+    process.stdout.write("Want to publish the types package? (y/n) ");
+    if (await request()) await run("cd types && npm publish --access public");
     process.stdout.write("Want to publish the package? (y/n) ");
     if (await request()) await run("npm publish --access public");
 })();

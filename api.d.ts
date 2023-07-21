@@ -11,41 +11,41 @@ type SocketTraveler = string | number | null | SocketTraveler[] | {
 type onRequestFunction<T> = (request: Request, response: Response, next: (() => T)) => any;
 type RoutesComponent = (props: {}) => VNode<RouteComponent>;
 type RouteComponent = (props: {
-    path: string | Location
-    route?: string
-    method?: Method
-    allow?: string[] | "*"
-    deny?: string[] | "*"
+    path: string | Location,
+    route?: string,
+    method?: Method,
+    allow?: string[] | "*",
+    deny?: string[] | "*",
     // todo: a request event class, maybe a combination of request and response, i have no idea
     onRequest?: onRequestFunction<Promise<void>> | onRequestFunction<void | Promise<void>>[]
 }) => VNode<RouteComponent> | void;
 
 type Shortcut = {
-    description: string
-    enabled: boolean
-    cooldown?: number
+    description: string,
+    enabled: boolean,
+    cooldown?: number,
     run: () => void
 };
 
 type HizzyConfiguration = {
-    dev?: boolean
-    port?: number
-    fileRefresh?: boolean
-    autoBuild?: boolean
-    listen?: boolean
-    main?: string
-    mainModule?: boolean
-    checkConfig?: boolean
-    realtime?: boolean
-    https?: boolean
-    srcFolder?: string
-    connectionTimeout?: number
-    keepaliveTimeout?: number
-    clientKeepalive?: number
-    minClientKeepalive?: number
-    includeOriginalInBuild?: boolean
-    addons?: Record<string, Object> | string[] | [string, Object][]; // todo: maybe intellisense for addon options, located in the addons' own d.ts files as a type?
-    static?: Record<string, string> | string[]
+    dev?: boolean,
+    port?: number,
+    fileRefresh?: boolean,
+    autoBuild?: boolean,
+    listen?: boolean,
+    main?: string,
+    mainModule?: boolean,
+    checkConfig?: boolean,
+    realtime?: boolean,
+    https?: boolean,
+    srcFolder?: string,
+    connectionTimeout?: number,
+    keepaliveTimeout?: number,
+    clientKeepalive?: number,
+    minClientKeepalive?: number,
+    includeOriginalInBuild?: boolean,
+    addons?: Record<string, Object> | string[] | [string, Object][], // todo: maybe intellisense for addon options, located in the addons' own d.ts files as a type?
+    static?: Record<string, string> | string[],
     cache?: {
         "addons"?: number,
         "npm"?: number,
@@ -126,7 +126,7 @@ declare class APIClass {
     dev: boolean;
     routes: Record<string, string>;
     customShortcuts: Record<string, Shortcut>;
-    app: Express
+    app: Express;
     preRequests: Function[];
     preRawSend: Function[];
     buildHandlers: Record<string, Function[]>;
@@ -201,8 +201,8 @@ declare class APIClass {
     getCookie(cookies: string, cookie: string): string | null;
 
     useGlobalState<T>(key?: any, default_?: T): {
-        get: () => T
-        set: (value: T | ((current: T) => T)) => T
+        get: () => T,
+        set: (value: T | ((current: T) => T)) => T,
         delete: () => void
     };
 
@@ -229,8 +229,6 @@ declare global {
     interface Function {
         everyone: (...args: SocketTraveler[]) => Record<string, SocketTraveler>;
     }
-}
-
+}/* ### TYPES ### */
 export {HizzyConfiguration};
-
 export default APIClass;
