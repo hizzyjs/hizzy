@@ -245,8 +245,14 @@ class Addon {
         return p;
     };
 
-    constructor(name, options) {
+    constructor(a, options) {
+        const name = a instanceof AddonModule ? a.name : a;
         if (Addon.addons[name]) return Addon.addons[name];
+        if (a instanceof AddonModule) {
+            this.#init = true;
+            this.#module = a;
+            printer.dev.pass("Loaded addon: %c" + this.#module.name + "@" + this.#module.version, "color: blue");
+        }
         this.#name = name;
         this.#options = options;
     };
@@ -1761,7 +1767,7 @@ class API extends EventEmitter {
     };
 
     defineConfig(r) {
-        return r;
+        return r || {};
     };
 }
 

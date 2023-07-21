@@ -3,7 +3,7 @@
 const random = () => crypto.getRandomValues(new Uint32Array([0]))[0].toString(36); // todo: maybe get back to BigUint64?
 
 const self = module.exports = {};
-self.defineConfig = r => r;
+self.defineConfig = r => r || {};
 const sT = Date.now();
 global.__sT__ = sT;
 global.__PRODUCT__ = "hizzy";
@@ -277,7 +277,7 @@ if (isTerminal && args[0]) {
         }
     } else if (confFileName.endsWith(".js") || confFileName.endsWith(".mjs") || confFileName.endsWith(".ts") || confFileName.endsWith(".mts")) {
         // noinspection JSValidateTypes
-        global[__PRODUCT_U__] = {defineConfig: r => r};
+        global[__PRODUCT_U__] = {defineConfig: r => r || {}};
         if (confFileName.endsWith(".js") || confFileName.endsWith(".mjs")) {
             conf = (await import(url.pathToFileURL(confPath))).default;
         } else {
@@ -365,7 +365,7 @@ if (isTerminal && args[0]) {
                 if (Array.isArray(addons)) {
                     for (let i = 0; i < addons.length; i++) {
                         const pl = addons[i];
-                        if (typeof pl === "string") await Hizzy.Addon.create(pl, {});
+                        if (typeof pl === "string" || pl instanceof Hizzy.AddonModule) await Hizzy.Addon.create(pl, {});
                         else if (Array.isArray(pl)) {
                             if (pl[1] && pl[1].constructor !== Object) return exit("Config's 'conf.addons[" + i + "][1]' property should be an object or empty, got: " + type(pl[1]));
                             await Hizzy.Addon.create(pl[0], pl[1]);
