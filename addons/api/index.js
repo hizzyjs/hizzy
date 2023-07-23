@@ -1,11 +1,20 @@
-// todo: this. will add features that can directly be put into the onRequest attribute. things like API.json(() => ({a: "b"}))
-// or like API.json({a: "b"}). or API.file, API.raw
-// not sure if this is needed... they could technically just do (req, res) => res.json({a: "b"})
-// new idea! a function to replace the <Routes> thing maybe? maybe an API tag?
-
 const {AddonModule} = Hizzy;
+const React = require("preact");
 
-throw new Error("Not done."); // todo
-
-module.exports = class APIAddon extends AddonModule {
+const self = module.exports = class APIAddon extends AddonModule {
+    static API = function (props = {}, ...a) {
+        return React.createElement(Route, {
+            path: props.path,
+            method: props.method,
+            onRequest: async (req, res) => {
+                let r = props.handle;
+                if (typeof r === "function") r = await r(req, res);
+                if (res.headersSent) return;
+                if (typeof r === "object") return res.json(r);
+                return res.send(r.toString());
+            }
+        }, ...a);
+    }
 };
+
+self.API.isRouteParent = true;
