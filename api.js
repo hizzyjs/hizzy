@@ -966,7 +966,7 @@ class API extends EventEmitter {
 
     #devRender(l, req, res) {
         const p = path.join(this.#dir, config.srcFolder, l);
-        if (!fs.existsSync(p)) return this.#staticRender(req, res);
+        if (!fs.existsSync(p) || !fs.statSync(p).isFile()) return this.#staticRender(req, res);
         const content = this.cacheDevFile(p);
         if (!content) return this.#invalidFile(res, l);
         this.sendFile(l, content, req, res).then(r => r);
@@ -1416,6 +1416,7 @@ class API extends EventEmitter {
         const routes = {};
         const makeRoute = async (s, u = {location: "", onRequest: [], allow: [], deny: []}) => {
             if (typeof s === "object" && !Array.isArray(s)) {
+                if (s.type && s.type !== Route && s.type.isRouteParent) s = s.type(s.props, s.props.children);
                 if (s.type !== Route)
                     return exit("Expected every child component of the Routes component to be a Route component!");
                 const p = path.join(u.location, s.props.path || "").replaceAll(path.sep, "/");
@@ -1474,7 +1475,7 @@ class API extends EventEmitter {
                 let next = async () => {
                     if (this.dev) this.#devRender(route, req, res);
                     else await this.#buildRender(route, req, res);
-                };
+                }; // todo: add a way of doing next() and continuing on with the actual next() so they can use other routes too
                 if (typeof onRequest === "function") onRequest(req, res, next);
                 else if (typeof onRequest === "object" && Array.isArray(onRequest)) {
                     const r = (i, ...a) => {

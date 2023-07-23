@@ -1,1 +1,0 @@
-# [This is an addon of the framework Hizzy!](https://www.npmjs.com/package/hizzy)
