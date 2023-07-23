@@ -17,7 +17,7 @@ To install & run Hizzy simply type this:
 npx hizzy
 ```
 
-# Why Hizzy?
+# Why was Hizzy selected as the name of the framework?
 
 In Turkish "hız" means "speed" in English. We added "zy" at the end to make it easier to pronounce and here you go,
 Hizzy!
