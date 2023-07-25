@@ -204,7 +204,7 @@ Hizzy.resolvePath = p => {
     }
     return p;
 };
-const urlExport = f => ({default: Hizzy.resolvePath(f)});
+const urlExport = f => ({default: "/" + Hizzy.resolvePath(f)});
 const import_ = async (f, _from, extra = []) => {
     const query = new URLSearchParams(f.includes("?") ? f.split("?").slice(1).join("?") : "");
     const isURL = query.get("url") === "";
