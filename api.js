@@ -840,6 +840,7 @@ class API extends EventEmitter {
                 }
                 files[f] = c;
                 pk[f] = c;
+                this.watchFile(f);
             }
         }
         if (!this.dev) this.#builtJSXCache[file] = files[file];
