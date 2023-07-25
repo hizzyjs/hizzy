@@ -1,7 +1,7 @@
 {
   "name": "create-hizzy",
   "description": "Hizzy is a React based modern web framework!",
-  "version": "0.0.71-beta",
+  "version": "0.0.72-beta",
   "main": "index.js",
   "type": "module",
   "repository": {
