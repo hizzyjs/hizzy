@@ -313,7 +313,8 @@ if (isTerminal && args[0]) {
 
     if (conf.warnAboutTypes) {
         try {
-            const got = require(dir + "/node_modules/@hizzyjs/types");
+            require(dir + "/node_modules/@hizzyjs/types");
+            const {version: got} = require(dir + "/node_modules/@hizzyjs/types/package.json");
             const current = require("./package.json").version;
             if (got !== current) printer.dev.warn(`The installed %c@hizzyjs/types@${got}&t's version don't match the version of%c hizzy@${current}&t, please consider updating. %cYou can disable this by setting 'warnAboutTypes' to false in config file.`, "color: orange", "color: orange", "color: gray");
         } catch (e) {

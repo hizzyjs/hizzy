@@ -1,1 +1,1 @@
-module.exports = require("./package.json").version;
+Object.defineProperty(module, "exports", {get: () => Hizzy});
