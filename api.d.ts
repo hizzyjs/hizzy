@@ -11,7 +11,7 @@ type SocketTraveler = string | number | null | SocketTraveler[] | {
 type onRequestFunction<T> = (request: Request, response: Response, next: ((...args: any[]) => T), ...args: any[]) => any;
 type RoutesComponent = (props: {}) => VNode<RouteComponent>;
 type RouteComponent = (props: {
-    path: string | Location,
+    path: string | Location | RegExp,
     route?: string,
     method?: Method,
     allow?: string[] | "*",
