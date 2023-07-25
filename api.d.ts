@@ -17,7 +17,7 @@ type RouteComponent = (props: {
     allow?: string[] | "*",
     deny?: string[] | "*",
     // todo: a request event class, maybe a combination of request and response
-    onRequest?: onRequestFunction<void | Promise<void>>[]
+    onRequest?: onRequestFunction<void | Promise<void>>[] | onRequestFunction<void | Promise<void>>
 }) => VNode<RouteComponent> | void;
 
 type Shortcut = {

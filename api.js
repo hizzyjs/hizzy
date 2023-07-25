@@ -764,7 +764,7 @@ class API extends EventEmitter {
     };
 
     async #builtJSX(file, code, req, res, files, pk, ls) {
-        file = path.join(file);
+        file = path.join(file).replaceAll("\\", "/");
         if (files[file] || res.headersSent) return;
         if (this.#builtJSXCache[file]) {
             files[file] = this.#builtJSXCache[file];
@@ -811,10 +811,10 @@ class API extends EventEmitter {
                 if (this.dev) {
                     ls = [];
                     const d = h => {
-                        const p = path.join(this.#dir, config.srcFolder, h);
+                        const p = path.join(this.#dir, config.srcFolder, h).replaceAll("\\", "/");
                         const fl = fs.readdirSync(p);
                         for (const i of fl) {
-                            const fl = path.join(p, i);
+                            const fl = path.join(p, i).replaceAll("\\", "/");
                             if (!fs.existsSync(fl)) return;
                             if (fs.statSync(fl).isFile()) {
                                 const p = (h ? h + "/" : "") + i;
@@ -828,7 +828,7 @@ class API extends EventEmitter {
         }
         for (const f of ls) {
             let c;
-            if (this.dev) c = this.cacheDevFile(path.join(this.#dir, config.srcFolder, f));
+            if (this.dev) c = this.cacheDevFile(path.join(this.#dir, config.srcFolder, f).replaceAll("\\", "/"));
             else c = await this.cacheBuildFile(f);
             if (!c) c = "";
             if (f.endsWith(".jsx") || f.endsWith(".tsx")) await this.#builtJSX(f, c, req, res, files, pk);
@@ -885,7 +885,7 @@ class API extends EventEmitter {
             pkJ = JSON.stringify(pk);
             if (!this.dev) this.#builtJSXPage[l] = [files, pkJ];
         }
-        this.#clientPages[req._uuid] = [files, path.join(file)];
+        this.#clientPages[req._uuid] = [files, path.join(file).replaceAll("\\", "/")];
         this.watchFile(req._Route);
         return pkJ;
     };
@@ -1130,7 +1130,7 @@ class API extends EventEmitter {
                 command: ["code", ideaCmd, phpStormCmd, webStormCmd][j]
             }));
             if (editors.length) shortcuts.e = {
-                description: "open VS Code in here", enabled: true, cooldown: 1000,
+                description: "opens an editor in here", enabled: true, cooldown: 1000,
                 run: async () => {
                     printer.raw.print(printer.substitute("%c  ✓  Select an editor: ", "color: gray"));
                     stdin.off("data", handler);
