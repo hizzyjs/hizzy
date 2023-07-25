@@ -27,7 +27,7 @@ declare class CookieAuth extends EventEmitter {
 
     hasAuthenticated(request: AuthRequest): boolean;
 
-    getData(request: AuthRequest): string | undefined;
+    getData(request: AuthRequest): any | undefined;
 
     on(eventName: "tokens.update", listener: () => void): this;
     on(eventName: "tokens.add", listener: (token: string, user: any) => void): this;
