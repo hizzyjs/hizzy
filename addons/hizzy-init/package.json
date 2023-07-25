@@ -1,7 +1,7 @@
 {
   "name": "create-hizzy-app",
   "description": "Hizzy is a React based modern web framework!",
-  "version": "0.0.66-beta",
+  "version": "0.0.67-beta",
   "main": "index.js",
   "type": "module",
   "repository": {
@@ -16,5 +16,8 @@
   "dependencies": {
     "fancy-printer": "^1.2.37",
     "jszip": "^3.10.1"
+  },
+  "bin": {
+    "create-hizzy-app": "index.js"
   }
 }

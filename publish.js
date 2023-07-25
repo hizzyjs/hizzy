@@ -98,6 +98,9 @@ declare module "hizzy/api" {${apiSpl[1]}}`
             "create-hizzy-app"
         ]) {
             json.name = name;
+            json.bin = {
+                [name]: "index.js"
+            };
             fs.writeFileSync(DS + "addons/hizzy-init/package.json", JSON.stringify(json, null, 2));
             await run(ED + "cd ./addons/hizzy-init && npm publish --access public");
         }
