@@ -210,7 +210,7 @@ const import_ = async (f, _from, extra = []) => {
     const isURL = query.get("url") === "";
     const isRaw = query.get("raw") === "";
     if (isURL && isRaw) throw new Error("An import can't have both '?url' and '?raw'!");
-    if (f === "hizzy") {
+    if (f === "hizzy" || f === "@hizzyjs/types") {
         if (isURL || isRaw) throw new Error("Cannot use the '?url' or the '?raw' on Hizzy!");
         return Hizzy;
     }
