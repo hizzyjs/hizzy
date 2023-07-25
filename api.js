@@ -856,7 +856,7 @@ class API extends EventEmitter {
             if (res.headersSent) return;
             req.__socket._externalLoad(file, this.#clientPages[req._uuid]);
             if (req.headers["hizzy-cache"] === "yes") return res.send("ok");
-            return res.send(req._RouteJSON.replaceAll("\\", "/") + "\u0000" + cPages);
+            return res.send(req._RouteJSON + "\u0000" + cPages);
         }
         this.#hashes[req._uuid] = r;
         await this.#getPagePacket(file, code, req, res);
@@ -1447,7 +1447,7 @@ class API extends EventEmitter {
                 } else if (typeof deny !== "object" || !Array.isArray(deny) || deny.some(i => typeof i !== "string")) return exit(msg2, deny);
                 routes[p] = {
                     route: r,
-                    routeJSON: JSON.stringify(r),
+                    routeJSON: JSON.stringify(r.replaceAll("\\", "/")),
                     allow,
                     deny,
                     onRequest: s.props.onRequest,
