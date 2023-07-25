@@ -831,6 +831,7 @@ class API extends EventEmitter {
             if (this.dev) c = this.cacheDevFile(path.join(this.#dir, config.srcFolder, f).replaceAll("\\", "/"));
             else c = await this.cacheBuildFile(f);
             if (!c) c = "";
+            this.watchFile(f);
             if (f.endsWith(".jsx") || f.endsWith(".tsx")) await this.#builtJSX(f, c, req, res, files, pk);
             else {
                 if (c instanceof Buffer) {
@@ -840,7 +841,6 @@ class API extends EventEmitter {
                 }
                 files[f] = c;
                 pk[f] = c;
-                this.watchFile(f);
             }
         }
         if (!this.dev) this.#builtJSXCache[file] = files[file];
