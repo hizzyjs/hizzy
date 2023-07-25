@@ -253,11 +253,16 @@ const import_ = async (f, _from, extra = []) => {
             const url = "http" + (isSecure ? "s" : "") + "://" + location.host + "/" + (relativeP ? path : "__hizzy__npm__/" + path);
             d.cookie = "__hizzy__=" + key;
             let a;
-            if (isRaw) {
-                const content = await (await fetch(url)).text();
-                a = {default: content, content};
-            } else a = await import(url);
-            d.cookie = "__hizzy__=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+            try {
+                if (isRaw) {
+                    const content = await (await fetch(url)).text();
+                    a = {default: content, content};
+                } else a = await import(url);
+            } catch (e) {
+                throw e;
+            } finally {
+                d.cookie = "__hizzy__=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+            }
             return a;
         } else {
             if (isRaw) {
@@ -271,9 +276,9 @@ const import_ = async (f, _from, extra = []) => {
     const getting = {normal: {}, load: {}, navigate: {}};
     await runCode(
         file.code + ";" +
-        [["client", "normal"], ["clientLoad", "load"], ["clientNavigate", "navigate"]].map(j =>
+        (f === mainFile ? [["client", "normal"], ["clientLoad", "load"], ["clientNavigate", "navigate"]].map(j =>
             file[j[0]].map(i => `__hizzy_get${R}__.${j[1]}.${i}=typeof ${i}!="undefined"&&${i};`).join("")
-        ).join(""),
+        ).join("") : ""),
         [
             ["R" + R2, (...a) => react.createElement(...a)],
             ["F" + R2, (...a) => react.Fragment(...a)],
@@ -334,44 +339,52 @@ const fetchPage = async (p, push = true) => {
     p = pathJoin(p, location.pathname.split("/").slice(1, -1));
     const actual = p.split("#")[0].split("?")[0];
     d.cookie = "__hizzy__=" + key;
-    if (pageCache[actual]) {
-        const page = pageCache[actual];
-        mainFile = page.mainFile;
-        files = page.files;
-        await fetch("/" + p, {
-            headers: {
-                "hizzy-dest": "script",
-                "hizzy-cache": "yes"
+    try {
+        if (pageCache[actual]) {
+            const page = pageCache[actual];
+            mainFile = page.mainFile;
+            files = page.files;
+            await fetch("/" + p, {
+                headers: {
+                    "hizzy-dest": "script",
+                    "hizzy-cache": "yes"
+                }
+            });
+        } else {
+            const spl = (await (await fetch("/" + p + "", {
+                headers: {
+                    "hizzy-dest": "script"
+                }
+            })).text()).split("\u0000");
+            if (spl.length === 1) {
+                try {
+                    const j = JSON.parse(spl[0]);
+                    console.error(j.error || j);
+                } catch (e) {
+                    console.error("Couldn't parse invalid JSON.");
+                    console.error(e);
+                }
+                return;
             }
-        });
-    } else {
-        const spl = (await (await fetch("/" + p + "", {
-            headers: {
-                "hizzy-dest": "script"
-            }
-        })).text()).split("\u0000");
-        if (spl.length === 1) {
-            try {
-                const j = JSON.parse(spl[0]);
-                console.error(j.error || j);
-            } catch (e) {
-                console.error("Couldn't parse invalid JSON.");
-                console.error(e);
-            }
-            return;
+            mainFile = JSON.parse(spl[0]);
+            files = JSON.parse(spl.slice(1).join("\u0000"));
         }
-        mainFile = JSON.parse(spl[0]);
-        files = JSON.parse(spl.slice(1).join("\u0000"));
+    } catch (e) {
+        throw e;
+    } finally {
+        d.cookie = "__hizzy__=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
     }
-    d.cookie = "__hizzy__=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
     exports = {};
     hasExported = [];
     fetchCache = {};
     for (const f in files) exports[f] = {};
     pageCache[actual] = {mainFile, files};
-    if (push) history.pushState({
-        ["__hizzy" + R + "__"]: p
-    }, null, "/" + p);
+    if (push) {
+        history.pushState({
+            ["__hizzy" + R + "__"]: p
+        }, null, "/" + p);
+        console.log("%cNavigated to " + location.href, "color: #4c88ff");
+    }
     await loadPage(mainFile);
 };
 const reloadPage = () => fetchPage(location.pathname);

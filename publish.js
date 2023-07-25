@@ -92,10 +92,9 @@ declare module "hizzy/api" {${apiSpl[1]}}`
         const json = require(DS + "addons/hizzy-init/package.json");
         json.version = __VERSION__;
         for (const name of [
-            "@hizzyjs/init",
-            "@hizzyjs/setup",
             "create-hizzy-project",
-            "create-hizzy-app"
+            "create-hizzy-app",
+            "create-hizzy"
         ]) {
             json.name = name;
             json.bin = {
