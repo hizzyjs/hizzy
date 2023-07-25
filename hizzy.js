@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const random = () => crypto.getRandomValues(new Uint32Array([0]))[0].toString(36); // todo: maybe get back to BigUint64?
+const random = () => crypto.getRandomValues(new BigUint64Array([0n]))[0].toString(36);
 
 const self = module.exports = {};
 self.defineConfig = r => r || {};
@@ -76,7 +76,7 @@ const checkDefault = (obj, def = {}, l = []) => {
 // const propExpect = (prop, expect, got) => exit("The config file %c" + __PRODUCT__ + ".json%c's %c" + prop + "%c property was expected as: %c" + expect + "%c, got:%c", "color: orange", "color: red", "color: orange", "color: red", "color: orange", "color: red", "color: orange", got);
 const isTerminal = require.main === module;
 if (!isTerminal) exit(__PRODUCT_U__ + "'s module mode has not been developed yet. Its API can still be reached by importing/requiring '" + __PRODUCT__ + "/api'.");
-// todo ^
+// todo module mode for the hizzy
 
 let dir = process.cwd();
 let file;
@@ -313,9 +313,9 @@ if (isTerminal && args[0]) {
 
     if (conf.warnAboutTypes) {
         try {
-            const got = require("@hizzyjs/types");
+            const got = require(dir + "/node_modules/@hizzyjs/types");
             const current = require("./package.json").version;
-            if (got !== current) printer.dev.warn(`The installed %c@hizzys/types@${got}&t's version don't match the version of%c hizzy@${current}&t, please consider updating. %cYou can disable this by setting 'warnAboutTypes' to false in config file.`, "color: orange", "color: orange", "color: gray");
+            if (got !== current) printer.dev.warn(`The installed %c@hizzyjs/types@${got}&t's version don't match the version of%c hizzy@${current}&t, please consider updating. %cYou can disable this by setting 'warnAboutTypes' to false in config file.`, "color: orange", "color: orange", "color: gray");
         } catch (e) {
             printer.dev.warn("Please consider installing %c@hizzyjs/types&t to allow your IDE's intellisense to work properly. %cYou can disable this by setting 'warnAboutTypes' to false in config file.", "color: orange", "color: gray");
         }
@@ -390,4 +390,4 @@ if (isTerminal && args[0]) {
             else if (conf.listen) Hizzy.scanBuild().then(r => r);
         }
     }
-})(); // todo: when importing html from a jsx, convert it to react document
+})();
