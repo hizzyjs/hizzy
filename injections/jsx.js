@@ -414,7 +414,7 @@ const loadPage = async file => {
     for (const t of timeouts) clearTimeout(t);
     timeouts = [];
     try {
-        const exp = await import_(file, null);
+        const exp = await import_(file.split("/").slice(-1)[0], null);
         if (exp && exp.default) {
             let def = exp.default;
             if (typeof def === "function") def = react.h(def, null);
