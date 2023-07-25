@@ -1,14 +1,14 @@
 {
   "name": "hizzy",
   "description": "Hizzy is a React based modern web framework!",
-  "version": "0.0.64-beta",
+  "version": "0.0.66-beta",
   "main": "hizzy.min.js",
   "bin": {
-    "hizzy": "./hizzy.min.js"
+    "hizzy": "hizzy.min.js"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/hizzyjs/hizzy"
+    "url": "git+https://github.com/hizzyjs/hizzy.git"
   },
   "types": "./hizzy.d.ts",
   "keywords": [
@@ -28,6 +28,7 @@
   "bugs": {
     "url": "https://github.com/hizzyjs/hizzy"
   },
+  "homepage": "https://github.com/hizzyjs/hizzy#readme",
   "license": "MIT",
   "author": "OguzhanUmutlu",
   "scripts": {},

@@ -139,10 +139,32 @@ const pathJoin = (f, cd = mainFile.split("/").slice(0, -1)) => {
     }
     return p.join("/");
 };
+const htmlToReact = text => {
+    const html = new DOMParser().parseFromString(text, "text/html");
+    /*** @param t {HTMLElement | ChildNode | Document} */
+    const toReact = t => {
+        if (t instanceof Text) return t.textContent;
+        const props = {};
+        const attrList = t.attributes;
+        for (let i = 0; i < attrList.length; i++) {
+            const attr = attrList[i];
+            props[attr.name.toLowerCase()] = attr.value;
+        }
+        const l = [];
+        t.childNodes.forEach(i => l.push(toReact(i)));
+        return react.createElement(t.tagName.toLowerCase(), {
+            ...props
+            // todo: somehow fix? https://legacy.reactjs.org/docs/dom-elements.html
+        }, ...l);
+    };
+    const l = [];
+    html.childNodes.forEach(i => l.push(toReact(i)));
+    return () => react.createElement(react.Fragment, null, ...l);
+};
 const fileHandlers = {
     build: {
         html: (name, content) => {
-            exports[name] = {default: new DOMParser().parseFromString(content, "text/html")};
+            exports[name] = {default: htmlToReact(content)};
             hasExported.push(name);
             return exports[name];
         },
@@ -155,13 +177,13 @@ const fileHandlers = {
             return exports[name];
         },
         js: async (name, content) => {
-            exports[name] = {default: await runCode(content, [], true)};
+            exports[name] = {default: await runModuleCode(content)};
             hasExported.push(name);
             return exports[name];
         }
     },
     external: {
-        html: (name, content) => ({default: new DOMParser().parseFromString(content, "text/html")}),
+        html: (name, content) => ({default: htmlToReact(content)}),
         css: (name, content) => {
             let st = document.createElement("style");
             st.innerHTML = content;

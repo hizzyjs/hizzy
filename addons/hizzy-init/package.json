@@ -1,0 +1,20 @@
+{
+  "name": "create-hizzy-app",
+  "description": "Hizzy is a React based modern web framework!",
+  "version": "0.0.66-beta",
+  "main": "index.js",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hizzyjs/hizzy"
+  },
+  "bugs": {
+    "url": "https://github.com/hizzyjs/hizzy"
+  },
+  "license": "MIT",
+  "author": "OguzhanUmutlu",
+  "dependencies": {
+    "fancy-printer": "^1.2.37",
+    "jszip": "^3.10.1"
+  }
+}
