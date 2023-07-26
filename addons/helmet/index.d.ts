@@ -5,4 +5,4 @@ declare class HelmetAddon extends Hizzy.API.AddonModule {
 }
 
 type pkg = HelmetAddon | (() => any);
-export = pkg;
+export default pkg;

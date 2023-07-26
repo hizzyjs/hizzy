@@ -108,4 +108,4 @@ declare class DatabaseAddon extends Hizzy.API.AddonModule {
     static Mongo: typeof MongoDatabase;
 }
 
-export = DatabaseAddon;
+export default DatabaseAddon;

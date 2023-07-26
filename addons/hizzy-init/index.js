@@ -48,3 +48,5 @@ await run(st + "npm install @hizzyjs/types", false);
 fs.rmSync(path.join(dir, "package-lock.json"));
 printer.raw.log("%c√%c Your project has been created at %c" + dir, "color: green", "", "color: orange");
 printer.raw.log("%c√%c You can now run your project with%c npx hizzy", "color: green", "", "color: orange");
+
+// todo: add a typescript/javascript option and it should exec `tsc --init` if ts is selected

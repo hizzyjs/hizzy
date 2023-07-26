@@ -12,4 +12,4 @@ type pkg = ImagesAddon | ((props?: {
     actualHeight?: number
     blur?: number
 }) => any);
-export = pkg;
+export default pkg;

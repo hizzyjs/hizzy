@@ -13,4 +13,4 @@ type pkg = LanguageAddon & (((props?: {
     get container(): { readonly [language: string]: Record<string, string> }
     get next(): string
 });
-export = pkg;
+export default pkg;

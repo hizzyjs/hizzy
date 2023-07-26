@@ -67,4 +67,4 @@ declare class AuthenticationAddon extends Hizzy.API.AddonModule {
     static _CookieAuth: typeof CookieAuth;
 }
 
-export = AuthenticationAddon;
+export default AuthenticationAddon;
