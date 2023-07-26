@@ -1,6 +1,6 @@
 // noinspection JSUnusedGlobalSymbols,ExceptionCaughtLocallyJS,JSPotentiallyInvalidConstructorUsage
 
-const random = () => crypto.getRandomValues(new Uint32Array([0]))[0].toString(36); // todo: maybe get back to BigUint64?
+const random = () => crypto.getRandomValues(new BigUint64Array([0n]))[0].toString(36);
 
 const crypto = require("crypto");
 const fs = require("fs");
