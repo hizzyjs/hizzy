@@ -16,3 +16,4 @@ declare class APIAddon extends Hizzy.API.AddonModule {
 
 type pkg = APIAddon;
 export default pkg;
+export {APIComponent as API};

@@ -57,7 +57,7 @@ declare class JSONDatabase extends KeyDatabase {
     static parse(text: string): Object;
 }
 
-declare class NestedJSONDatabase extends KeyDatabase {
+declare class NestedJSONDatabase extends NestedKeyDatabase {
     asNotNested(): JSONDatabase;
 
     static stringify(json: Object, space?: number): string;
@@ -73,7 +73,7 @@ declare class YAMLDatabase extends KeyDatabase {
     static parse(text: string): Object;
 }
 
-declare class NestedYAMLDatabase extends KeyDatabase {
+declare class NestedYAMLDatabase extends NestedKeyDatabase {
     asNotNested(): YAMLDatabase;
 
     static stringify(json: Object, space?: number): string;
@@ -109,3 +109,13 @@ declare class DatabaseAddon extends Hizzy.API.AddonModule {
 }
 
 export default DatabaseAddon;
+export {
+    JSONDatabase as JSON,
+    NestedJSONDatabase as NestedJSON,
+    YAMLDatabase as YAML,
+    NestedYAMLDatabase as NestedYAML,
+    XMLDatabase as XML,
+    SQLiteDatabase as SQLite,
+    MySQLDatabase as MySQL,
+    MongoDatabase as Mongo
+};

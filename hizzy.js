@@ -123,6 +123,7 @@ if (isTerminal && _argv_.help) {
     printer.raw.log("%c    --injections%c             builds html/jsx injection files", "color: green", "color: yellow");
     printer.raw.log("%c    --addon-init%c             initializes up an addon environment", "color: green", "color: yellow");
     printer.raw.log("%c    --no-clear%c               disables the initial screen clear", "color: green", "color: yellow");
+    printer.raw.log("%c    --ts%c                     makes it prefer default TypeScript files", "color: green", "color: yellow");
     process.exit();
 }
 if (isTerminal && _argv_.version) {
@@ -232,7 +233,7 @@ if (isTerminal && args[0]) {
         "fileRefresh": true,
         "autoBuild": true,
         "listen": true,
-        "main": "Server.jsx",
+        "main": _argv_["ts"] ? "Server.tsx" : "Server.jsx",
         "mainModule": true,
         "checkConfig": true,
         "realtime": true,
@@ -257,7 +258,10 @@ if (isTerminal && args[0]) {
     };
     let confFileName = _argv_.config;
     if (confFileName && !fs.existsSync(path.join(dir, confFileName))) return exit("Config file %c" + confFileName + "&t given in the command line arguments is invalid:", "color: orange");
-    if (!confFileName) for (const a of ["json", "config.json", "config.ts", "config.js", "config.mts", "config.mjs"]) {
+    const configPrefer = ["json", "config.json", "config.ts", "config.js"];
+    if (_argv_["ts"]) configPrefer.push("config.mjs", "config.mts");
+    else configPrefer.push("config.mts", "config.mjs");
+    if (!confFileName) for (const a of configPrefer) {
         confFileName = __PRODUCT__ + "." + a;
         if (fs.existsSync(path.join(dir, confFileName))) break;
     }
@@ -266,7 +270,7 @@ if (isTerminal && args[0]) {
     if (!confExists || !fs.statSync(confPath).isFile()) {
         if (confExists) fs.rmSync(confPath);
         if (_argv_.debug) printer.dev.debug("Creating the %c/" + confFileName + "&t file...", "color: orange");
-        fs.writeFileSync(confPath, `export default Hizzy.defineConfig({});`);
+        fs.writeFileSync(confPath, `export default Hizzy.defineConfig({${_argv_["ts"] ? `\n    main: "Server.tsx"\n` : ""});`);
     }
     let conf;
     if (confFileName.endsWith(".json")) {
@@ -281,13 +285,13 @@ if (isTerminal && args[0]) {
         if (confFileName.endsWith(".js") || confFileName.endsWith(".mjs")) {
             conf = (await import(url.pathToFileURL(confPath))).default;
         } else {
-            const filePath = path.join(path.dirname(confPath), random() + "." + (confFileName.endsWith(".mjs") ? "m" : "") + "js");
+            const filePath = path.join(path.dirname(confPath), random() + "." + (confFileName.endsWith(".mts") ? "m" : "") + "js");
             fs.writeFileSync(filePath, require("@babel/core").transformSync(fs.readFileSync(confPath), {
                 filename: path.basename(confPath),
                 presets: [require("@babel/preset-typescript")]
             }).code);
             try {
-                conf = (await import(url.pathToFileURL(confPath))).default;
+                conf = (await import(url.pathToFileURL(filePath))).default;
             } finally {
                 fs.rmSync(filePath);
             }
@@ -318,7 +322,7 @@ if (isTerminal && args[0]) {
             const current = require("./package.json").version;
             if (got !== current) printer.dev.warn(`The installed %c@hizzyjs/types@${got}&t's version don't match the version of%c hizzy@${current}&t, please consider updating. %cYou can disable this by setting 'warnAboutTypes' to false in config file.`, "color: orange", "color: orange", "color: gray");
         } catch (e) {
-            printer.dev.warn("Please consider installing %c@hizzyjs/types&t to allow your IDE's intellisense to work properly. %cYou can disable this by setting 'warnAboutTypes' to false in config file.", "color: orange", "color: gray");
+            // printer.dev.warn("Please consider installing %c@hizzyjs/types&t to allow your IDE's intellisense to work properly. %cYou can disable this by setting 'warnAboutTypes' to false in config file.", "color: orange", "color: gray");
         }
     }
     if (!_argv_.debug) {

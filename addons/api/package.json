@@ -1,7 +1,7 @@
 {
   "name": "@hizzyjs/api",
   "description": "Hizzy's official API support",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "main": "index.js",
   "repository": {
     "type": "git",
