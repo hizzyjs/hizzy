@@ -1,7 +1,7 @@
 {
   "name": "@hizzyjs/authentication",
   "description": "Hizzy's official authentication support",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "main": "index.js",
   "repository": {
     "type": "git",

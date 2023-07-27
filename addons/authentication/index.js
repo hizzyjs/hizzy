@@ -150,7 +150,7 @@ class DiscordAuthentication extends CookieAuth {
 
 const {AddonModule} = Hizzy;
 module.exports = class AuthenticationAddon extends AddonModule {
-    static LocalAuthentication = LocalAuthentication;
-    static DiscordAuthentication = DiscordAuthentication;
-    static _CookieAuth = CookieAuth;
 };
+module.exports.LocalAuthentication = LocalAuthentication;
+module.exports.DiscordAuthentication = DiscordAuthentication;
+module.exports._CookieAuth = CookieAuth;
