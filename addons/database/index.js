@@ -445,15 +445,15 @@ class BitListDatabase extends ListDatabase {
 def = (a, b) => Object.defineProperty(global, a, {get: () => b});
 
 module.exports = class DatabaseAddon extends AddonModule {
-    static JSON = JSONDatabase;
-    static NestedJSON = NestedJSONDatabase;
-    static YAML = YAMLDatabase;
-    static NestedYAML = NestedYAMLDatabase;
-    static XML = XML;
-    static SQLite = SQLiteDatabase;
-    static MySQL = MySQLDatabase;
-    static Mongo = MongoDatabase;
 };
+module.exports.JSON = JSONDatabase;
+module.exports.NestedJSON = NestedJSONDatabase;
+module.exports.YAML = YAMLDatabase;
+module.exports.NestedYAML = NestedYAMLDatabase;
+module.exports.XML = XML;
+module.exports.SQLite = SQLiteDatabase;
+module.exports.MySQL = MySQLDatabase;
+module.exports.Mongo = MongoDatabase;
 /*
 todo global.ListDatabase = {
     int: 1, // a basic list of ints / strings
