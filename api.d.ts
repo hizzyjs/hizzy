@@ -8,7 +8,7 @@ type SocketTraveler = string | number | null | SocketTraveler[] | {
     [key: string | number | symbol | null]: SocketTraveler
 };
 type onRequestFunction<T> = (request: Request, response: Response, next: ((...args: any[]) => T), ...args: any[]) => any;
-type RoutesComponent = (props: { children: RouteComponent | RouteComponent[] | any }) => any;
+type RoutesComponent = (props: { children?: RouteComponent | RouteComponent[] | any }) => any;
 type RouteComponent = (props: {
     path: string | Location,
     route?: string,
