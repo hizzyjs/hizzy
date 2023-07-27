@@ -1,6 +1,5 @@
 // noinspection JSUnusedGlobalSymbols
 
-import {VNode} from "preact";
 import {Express, Request, Response} from "express";
 
 type Socket = Record<any, any>;
@@ -9,7 +8,7 @@ type SocketTraveler = string | number | null | SocketTraveler[] | {
     [key: string | number | symbol | null]: SocketTraveler
 };
 type onRequestFunction<T> = (request: Request, response: Response, next: ((...args: any[]) => T), ...args: any[]) => any;
-type RoutesComponent = (props: {}) => VNode<RouteComponent>;
+type RoutesComponent = (props: { children: RouteComponent | RouteComponent[] | any }) => any;
 type RouteComponent = (props: {
     path: string | Location,
     route?: string,
@@ -17,8 +16,9 @@ type RouteComponent = (props: {
     allow?: string[] | "*",
     deny?: string[] | "*",
     // todo: a request event class, maybe a combination of request and response
-    onRequest?: onRequestFunction<void | Promise<void>>[] | onRequestFunction<void | Promise<void>>
-}) => VNode<RouteComponent> | void;
+    onRequest?: onRequestFunction<void | Promise<void>>[] | onRequestFunction<void | Promise<void>>,
+    children?: null | RouteComponent | RouteComponent[]
+}) => any;
 
 type Shortcut = {
     description: string,
@@ -55,7 +55,6 @@ type HizzyConfiguration = {
     },
     warnAboutTypes?: boolean
 };
-type DefineConfigFunction<T> = (config: T) => T;
 
 declare class AddonModule {
     constructor(pkg: Object, options: Object);
@@ -220,11 +219,11 @@ declare class APIClass {
 
     watchFile(file: string): void;
 
-    defineConfig: DefineConfigFunction<HizzyConfiguration> |
-        DefineConfigFunction<(options: {
-            argv: Record<string, string>,
-            isDev: boolean
-        }) => Promise<HizzyConfiguration>>;
+    defineConfig(configuration: HizzyConfiguration): HizzyConfiguration;
+    defineConfig(configurationFunction: (options: {
+        argv: Record<string, string>,
+        isDev: boolean
+    }) => HizzyConfiguration): HizzyConfiguration;
 }
 
 declare global {

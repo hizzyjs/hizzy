@@ -69,11 +69,12 @@ declare module "hizzy/api" {${apiSpl[1]}}`
 
     require(DS + "api.js");
 
-    const readdirRecursive = (dir, sub = 0, sep = S) => {
+    const readdirRecursive = (dir, sub = 0, sep = S, exc = []) => {
         const obj = [];
         fs.readdirSync(dir).forEach(i => {
+            if (exc.includes(i)) return;
             i = dir + sep + i;
-            if (fs.statSync(i).isDirectory()) Object.assign(obj, readdirRecursive(i, sub, sep));
+            if (fs.statSync(i).isDirectory()) Object.assign(obj, readdirRecursive(i, sub, sep, exc));
             else obj[i.substring(sub)] = fs.readFileSync(i);
         });
         return obj;
@@ -82,13 +83,19 @@ declare module "hizzy/api" {${apiSpl[1]}}`
     process.stdout.write("Want to publish create-app packages? (y/n) ");
     if (await request()) {
         const Zip = require("jszip");
-        const dir = DS + "examples/base-example";
-        const files = readdirRecursive(dir, dir.length + 1, "/");
-        const zip = new Zip;
-        for (const file in files) zip.file(file, files[file]);
-        fs.writeFileSync(DS + "addons/hizzy-init/files.zip", await zip.generateAsync({
-            type: "nodebuffer"
-        }));
+
+        const doFiles = async name => {
+            const dir = DS + "addons/hizzy-init/projects/" + name;
+            const files = readdirRecursive(dir, dir.length + 1, "/", ["package.json", "package-lock.json", "node_modules"]);
+            const zip = new Zip;
+            for (const file in files) zip.file(file, files[file]);
+            fs.writeFileSync(DS + "addons/hizzy-init/dist/" + name + ".zip", await zip.generateAsync({
+                type: "nodebuffer"
+            }));
+        };
+        await doFiles("js");
+        await doFiles("ts");
+
         const json = require(DS + "addons/hizzy-init/package.json");
         json.version = __VERSION__;
         for (const name of [

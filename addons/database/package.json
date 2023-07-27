@@ -1,7 +1,7 @@
 {
   "name": "@hizzyjs/database",
   "description": "Hizzy's official database support",
-  "version": "1.0.4",
+  "version": "1.0.6",
   "main": "index.js",
   "repository": {
     "type": "git",

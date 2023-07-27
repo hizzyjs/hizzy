@@ -68,3 +68,4 @@ declare class AuthenticationAddon extends Hizzy.API.AddonModule {
 }
 
 export default AuthenticationAddon;
+export {LocalAuthentication, DiscordAuthentication, CookieAuth as _CookieAuth};

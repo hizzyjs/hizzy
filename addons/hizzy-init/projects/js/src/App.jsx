@@ -17,8 +17,8 @@ function Main() {
     const [count, setCount] = useState(0);
     getClicks().then(setCount);
 
-    function onClick(e) {
-        e.preventDefault();
+    function onClick(event) {
+        event.preventDefault();
         addClick();
         setCount(count + 1);
     }

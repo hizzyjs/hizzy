@@ -1,0 +1,7 @@
+{
+  "name": "ts",
+  "devDependencies": {
+    "hizzy": "latest",
+    "@types/react": "latest"
+  }
+}

@@ -4,7 +4,6 @@ package-lock.json
 node_modules
 .build
 
-examples/base-example/.build
 examples/discord-auth/.build
 examples/hooks/.build
 examples/language/.build
