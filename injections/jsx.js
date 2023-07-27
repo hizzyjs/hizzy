@@ -120,12 +120,12 @@ let fetchCache = {};
 
 await handshookSurePromise;
 const Hizzy = {};
-const __hooks = await import("http" + (isSecure ? "s" : "") + "://" + location.host + "/__hizzy__preact__hooks__?" + EXP);
+const __hooks = await import("http" + (isSecure ? "s" : "") + "://" + location.host + "/" + EXP + "/__hizzy__preact__hooks__");
 const __react = __hooks["React"];
 if (!__react) location.reload();
 const react = __react;
 Object.assign(Hizzy, __react, __hooks);
-const ADDONS = await (await fetch("/__hizzy__addons__?" + R2)).json();
+const ADDONS = await (await fetch("/" + R2 + "/__hizzy__addons__")).json();
 d.cookie = "__hizzy__=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
 const pathJoin = (f, cd = mainFile.split("/").slice(0, -1)) => {
     const p = [...cd];
@@ -249,27 +249,24 @@ const import_ = async (f, _from, extra = []) => {
             }
             if (isRaw) return {default: content, content};
             return urlExport(f);
-        } else if (["html", "css", "js"].includes(fExt)) {
-            const url = "http" + (isSecure ? "s" : "") + "://" + location.host + "/" + (relativeP ? path : "__hizzy__npm__/" + path);
+        } else {
+            const url = "http" + (isSecure ? "s" : "") + "://" + location.host + "/" + (relativeP ? path : "__hizzy__npm__/" + files[_from].importList.find(i => i[0] === path.split("/")[0])[1] + "/" + path);
             d.cookie = "__hizzy__=" + key;
             let a;
             try {
                 if (isRaw) {
                     const content = await (await fetch(url)).text();
                     a = {default: content, content};
-                } else a = await import(url);
+                } else {
+                    a = await import(url);
+                    if (!relativeP) a = a.default;
+                }
             } catch (e) {
                 throw e;
             } finally {
                 d.cookie = "__hizzy__=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
             }
             return a;
-        } else {
-            if (isRaw) {
-                const content = fetchCache[f] = fetchCache[f] ?? (await (await fetch(f)).text());
-                return {default: content, content};
-            }
-            return urlExport(f);
         }
     }
     if (isRaw) throw new Error("Cannot use the '?raw' on JSX/TSX files!");
