@@ -76,7 +76,7 @@ const checkDefault = (obj, def = {}, l = []) => {
 // const propExpect = (prop, expect, got) => exit("The config file %c" + __PRODUCT__ + ".json%c's %c" + prop + "%c property was expected as: %c" + expect + "%c, got:%c", "color: orange", "color: red", "color: orange", "color: red", "color: orange", "color: red", "color: orange", got);
 const isTerminal = require.main === module;
 if (!isTerminal) exit(__PRODUCT_U__ + "'s module mode has not been developed yet. Its API can still be reached by importing/requiring '" + __PRODUCT__ + "/api'.");
-// todo module mode for the hizzy
+// todo: module mode for the hizzy
 
 let dir = process.cwd();
 let file;
@@ -247,10 +247,12 @@ if (isTerminal && args[0]) {
         "addons": [],
         "includeOriginalInBuild": true,
         "cache": {
-            "addons": 0,
-            "npm": 0,
-            "preact": 0,
-            "preact-hooks": 0,
+            "addons": 31536000,
+            "npm": 31536000,
+            "preact": 31536000,
+            "preact-hooks": 31536000,
+            "html-injection": 31536000,
+            "jsx-injection": 31536000,
             "static": {}
         },
         warnAboutTypes: true
@@ -270,7 +272,7 @@ if (isTerminal && args[0]) {
     if (!confExists || !fs.statSync(confPath).isFile()) {
         if (confExists) fs.rmSync(confPath);
         if (_argv_.debug) printer.dev.debug("Creating the %c/" + confFileName + "&t file...", "color: orange");
-        fs.writeFileSync(confPath, `export default Hizzy.defineConfig({${_argv_["ts"] ? `\n    main: "Server.tsx"\n` : ""});`);
+        fs.writeFileSync(confPath, `export default Hizzy.defineConfig({${_argv_["ts"] ? `\n    main: "Server.tsx"\n` : ""}});`);
     }
     let conf;
     if (confFileName.endsWith(".json")) {

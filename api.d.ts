@@ -51,7 +51,9 @@ type HizzyConfiguration = {
         "npm"?: number,
         "preact"?: number,
         "preact-hooks"?: number,
-        "static"?: Record<string, number>
+        "html-injection"?: number,
+        "jsx-injection"?: number,
+        "static"?: Record<string, number> | number
     },
     warnAboutTypes?: boolean
 };
@@ -81,7 +83,7 @@ declare class AddonModule {
 
     disable(reason: string): void;
 
-    log(...s: any): void;
+    log(...s: any[]): void;
 }
 
 declare class Client {
@@ -131,7 +133,9 @@ declare class APIClass {
     customShortcuts: Record<string, Shortcut>;
     preRequests: Function[];
     preRawSend: Function[];
-    buildHandlers: Record<string, ((file: string, content: string, setContent: (content: string) => void, zip: any, extension: string, location: string[]) => any)[]>;
+    buildHandlers: Record<string, (
+        (file: string, content: string, setContent: (content: string) => void, zip: any, extension: string, location: string[]) => any
+        )[]>;
     scanHandlers: Record<string, Record<string, ((location: string, data: string, files: Record<string, string>) => any)[]>>;
     functionDecorators: Record<string, ((data: {
         start: number,
@@ -142,6 +146,7 @@ declare class APIClass {
         json: Object,
         replaceText: (position: { start: number, end: number }, text: string) => void
     }) => any)[]>;
+    preFileHandlers: Record<string, (file: string, content: string, setFile: (file: string) => void, setContent: (content: string) => void, cancel: () => void) => any>;
 
     constructor(dir: string);
 

@@ -5,6 +5,6 @@
     const script = document.createElement("script");
     script.innerHTML = "(" + (() => {
 
-    }).toString() + ")()"; // todo: it can't manage things like document.title, cookies, etc. somehow give permissions
+    }).toString() + ")()"; // note: it can't manage things like document.title, cookies, etc. somehow give permissions
     iframe.contentDocument.body.appendChild(script);
 </script>

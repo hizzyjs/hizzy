@@ -18,6 +18,7 @@ const babel = require("@babel/core");
 const babelParser = require("@babel/parser");
 const traverse = require("@babel/traverse").default;
 const printer = require("fancy-printer");
+const esbuild = require("esbuild");
 const minify = {
     js: (...r) => require("uglify-js").minify(...r).code,
     css: (...r) => require("csso").minify(...r).css,
@@ -50,26 +51,15 @@ if (isTerminal) hizzy = require(fs.existsSync(hizzyPath) ? hizzyPath : hizzyMinP
 const {args: argv, config} = hizzy;
 const staticJSON = JSON.stringify(config?.static);
 
-// todo: maybe split static into two, static and dynamic. static = cached, dynamic = not cached
-// todo: use esbuild
-// todo: compile the react element stuff in backend on startup, edit: i don't think this is possible anymore, maybe it is idk, edit: i think it is, edit: it is
-// todo: add a function that gets all client functions of a file
-// todo: IMPORTANT: it should update when css updates
 // todo: a playground in the web page, update: idk if i will do this, this requires a sandbox server, i might use something like repl.it or glitch.com
-// todo: cache file contents for the production mode
-// todo: variable transaction? like @server for variables? wouldn't work with literals. not sure if it's a good idea. they could just use currentClient.eval("variable") ? not sure if this works
-// todo: addon api for the socket messages etc.
-// todo: make a file hashmap(not sure if it's a good idea or even necessary)
-
-// todo: test it on mac and linux
+// no-odo: variable transaction? bad idea, just use functions to move them around
+// todo: test it on mac
 
 const runtimeId = random();
 const pack = s => {
+    /*if(typeof s === "bigint") return `\x00\x00${s.toString()}`;
+    if(typeof s === "function") return `\x00\x01${s.toString()}`;*/
     return JSON.stringify(s); // todo: sophisticated packing; date, bigint, function or objects/arrays including these
-    // const t = typeof s;
-    // let l = s;
-    // if (t === "function") l = s.toString();
-    // return JSON.stringify([t, l]);
 };
 const EVERYONE = f => {
     if (!f["__FUNCTION__"]) throw new Error("EVERYONE function only allows client-sided functions!");
@@ -149,29 +139,32 @@ const jsOpt = {
 const HIZZY_EXPERIMENTAL = process.argv.includes("--injections");
 let experimentalId = Date.now().toString(36);
 let jsxInjection, htmlInjection, preactCode, preactHooksCode;
-const generateInjections = () => {
-    const t = Date.now();
-    jsxInjection = minify.js(fs.readFileSync(path.join(__dirname, "injections/jsx.js"), "utf8"), jsOpt);
-    fs.writeFileSync(path.join(__dirname, "injections/jsx.min.js"), jsxInjection);
-    htmlInjection = minify.js(fs.readFileSync(path.join(__dirname, "injections/html.js"), "utf8")
-        .replace("$CKL", ck.length + 1 + "")
-        .replaceAll("$CK", ck), jsOpt);
-    fs.writeFileSync(path.join(__dirname, "injections/html.min.js"), htmlInjection);
-    (async () => {
+const generateInjections = async () => {
+    try {
+        const t = Date.now();
+        jsxInjection = minify.js(fs.readFileSync(path.join(__dirname, "injections/jsx.js"), "utf8"), jsOpt);
+        fs.writeFileSync(path.join(__dirname, "injections/jsx.min.js"), jsxInjection);
+        htmlInjection = minify.js(fs.readFileSync(path.join(__dirname, "injections/html.js"), "utf8")
+            .replace("$CKL", ck.length + 1 + "")
+            .replaceAll("$CK", ck), jsOpt);
+        fs.writeFileSync(path.join(__dirname, "injections/html.min.js"), htmlInjection);
         preactCode = (await (await fetch("https://esm.sh/stable/preact/es2022/preact.mjs")).text())
             .replace("sourceMappingURL", "");
         fs.writeFileSync(path.join(__dirname, "injections/preact.min.js"), preactCode); // todo: update 2022 to 2023(or 2024) when needed
         preactHooksCode = (await (await fetch("https://esm.sh/stable/preact/es2022/hooks.js")).text())
                 .replace("sourceMappingURL", "")
-                .replace(/"\/stable\/preact@(\d.?)+\/es2022\/preact\.mjs"/, `"./__hizzy__preact__?${experimentalId}"`) +
-            `\nimport *as React from "./__hizzy__preact__?${experimentalId}"; export{React}`;
+                .replace(/"\/stable\/preact@(\d.?)+\/es2022\/preact\.mjs"/, `"./__${__PRODUCT__}__preact__"`) +
+            `\nimport *as React from "./__${__PRODUCT__}__preact__"; export{React}`;
         fs.writeFileSync(path.join(__dirname, "injections/hooks.min.js"), preactHooksCode);
         fs.writeFileSync(path.join(__dirname, "injections/.last"), experimentalId);
         const sT = Date.now() - t;
         printer.dev.pass("Injections have been minified. (%c" + timeForm(sT) + "&t)", "color: orange");
-    })();
+    } catch (e) {
+        printer.dev.fail("Couldn't compile the injections!");
+        printer.dev.error(e);
+    }
 };
-if (HIZZY_EXPERIMENTAL) generateInjections();
+if (HIZZY_EXPERIMENTAL) generateInjections().then(r => r);
 else {
     jsxInjection = fs.readFileSync(path.join(__dirname, "injections/jsx.min.js"), "utf8");
     htmlInjection = fs.readFileSync(path.join(__dirname, "injections/html.min.js"), "utf8");
@@ -380,7 +373,6 @@ class API extends EventEmitter {
     #hashes = {};
     #initFunctions = [];
     #importMap = {};
-    #importMains = {};
     #watchingFiles = {};
     #isInit = false;
     #uuidTimeout = {};
@@ -401,6 +393,7 @@ class API extends EventEmitter {
     buildHandlers = {};
     scanHandlers = {};
     functionDecorators = {};
+    preFileHandlers = {};
 
     constructor(dir) {
         if (API.API) return API.API;
@@ -421,61 +414,49 @@ class API extends EventEmitter {
             const uuid = this.getCookie(req.headers.cookie, ck);
             const socket = this.#clients[uuid];
             printer.dev.debug("request: " + req.url + ", method: " + req.method + ", ip: " + (req.ip.startsWith("::ffff:") ? req.ip.substring(7) : req.ip));
-            if (!this.dev && (this.#isBuilding || this.#isScanningBuild)) return res.send("Building, please be patient.<script>setTimeout(_=>location.reload(),1000)</script>");
+            if (!this.dev && (this.#isBuilding || this.#isScanningBuild)) return res.send("Building, please be patient.<script>setTimeout(()=>location.reload(),1000)</script>");
             let l = req.url.split("?")[0];
             if (l[0] !== "/") return;
             l = l.substring(1);
             req.__socket = socket;
             req._uuid = uuid;
             if (socket) socket._req = req;
-            if (socket && l === `__${__PRODUCT__}__addons__`) {
-                const run = req.url.split("?")[1];
-                if (run !== runtimeId) return res.redirect("/__" + __PRODUCT__ + "__addons__?" + runtimeId);
+            if (socket && l === runtimeId + `/__${__PRODUCT__}__addons__`) {
                 const cache = config.cache["addons"] * 1;
                 if (cache && cache > 0) res.setHeader("Cache-Control", "max-age=" + cache);
                 await this.sendRawFile(".json", this.#addonCache, req, res);
                 return;
             }
             if (socket && l.includes("/") && l.split("/")[0] === `__${__PRODUCT__}__npm__`) {
-                const cache = config.cache["import"] * 1;
+                const cache = config.cache["npm"] * 1;
                 if (cache && cache > 0) res.setHeader("Cache-Control", "max-age=" + cache);
-                const name = l.split("/")[1];
+                const name = l.split("/")[2];
                 if (!name) return;
-                const err = [];
-                this.#addImport(name, null, err);
-                if (err.length) return this.sendRawFile(".js", `throw 'Module not found: ${err.join(", ")}'`, req, res);
-                if (!this.#importMap[name]) return;
-                const rest = l.split("/").slice(2).join("/") || this.#importMains[name];
-                const content = this.#importMap[name][rest];
-                if (!content) return;
-                await this.sendRawFile(rest, content, req, res);
+                if (!this.#importMap[name]) return this.sendRawFile(".js", `throw "Module not found: ${JSON.stringify(name)}"`, req, res);
+                await this.sendRawFile(".js", this.#importMap[name].code, req, res);
                 return;
             }
-            if (socket && l === "__" + __PRODUCT__ + "__preact__") {
-                const run = req.url.split("?")[1];
-                if (run !== experimentalId) return;
-                const cache = config.cache["preact"] * 1;
+            if (socket && l === experimentalId + "/__" + __PRODUCT__ + "__preact__") {
+                const cache = config.cache["preact"] || 0;
                 if (cache && cache > 0) res.setHeader("Cache-Control", "max-age=" + cache);
                 await this.sendRawFile(".js", preactCode, req, res);
                 return;
             }
-            if (socket && l === "__" + __PRODUCT__ + "__preact__hooks__") {
-                const run = req.url.split("?")[1];
-                if (run !== experimentalId) return;
+            if (socket && l === experimentalId + "/__" + __PRODUCT__ + "__preact__hooks__") {
                 // noinspection PointlessArithmeticExpressionJS
-                const cache = config.cache["preact-hooks"] * 1;
+                const cache = config.cache["preact-hooks"] || 0;
                 if (cache && cache > 0) res.setHeader("Cache-Control", "max-age=" + cache);
                 await this.sendRawFile(".js", preactHooksCode, req, res);
                 return;
             }
-            if (this.#webUUIDs[uuid] && !socket && l === "__" + __PRODUCT__ + "__injection__html__") {
-                const cache = config.cache["htmlInjection"] * 1;
+            if (this.#webUUIDs[uuid] && !socket && l === experimentalId + "/__" + __PRODUCT__ + "__injection__html__") {
+                const cache = config.cache["html-injection"] || 0;
                 if (cache && cache > 0) res.setHeader("Cache-Control", "max-age=" + cache);
                 await this.sendRawFile(".js", `(async()=>{${htmlInjection}})()`, req, res);
                 return;
             }
-            if (this.#webUUIDs[uuid] && !socket && l === "__" + __PRODUCT__ + "__injection__jsx__") {
-                const cache = config.cache["jsxInjection"] * 1;
+            if (this.#webUUIDs[uuid] && !socket && l === experimentalId + "/__" + __PRODUCT__ + "__injection__jsx__") {
+                const cache = config.cache["jsx-injection"] || 0;
                 if (cache && cache > 0) res.setHeader("Cache-Control", "max-age=" + cache);
                 await this.sendRawFile(".js", `(async()=>{${jsxInjection}})()`, req, res);
                 return;
@@ -555,6 +536,40 @@ class API extends EventEmitter {
         // I COULD add a function like, renameVariableInContext which would rename all names for the variable in the context
         // what i mean by context is like, the current function, but again if they reassign it... in like a function
         // it would be hard to detect... not sure if i'm gonna add this, it would be great if someone could though!
+        /*
+
+        CONCEPT:
+
+        function C() {
+            console.log(1)
+        }
+
+        function B() {
+            function C() { // redefined!
+                console.log(2)
+            }
+
+            // @server
+            function A() {
+                console.log(2)
+                C();
+            }
+
+            A(); // How will the server function know which one to pick 🤔
+        }
+
+        B();
+
+        */
+
+        this.preFileHandlers.css = (file, content, f, c) => {
+            f(".js");
+            c(`let st=document.createElement("style");st.innerHTML=${JSON.stringify(content.toString())};document.head.appendChild(st);export default st`);
+        };
+        this.preFileHandlers.html = (file, content, f, c) => {
+            f(".js");
+            c(`export default new DOMParser().parseFromString(${JSON.stringify(content.toString())},"text/html")`);
+        };
     };
 
     findOptimalFile(file) {
@@ -624,11 +639,13 @@ class API extends EventEmitter {
                 if (socket._handshook && isJSX) if (socket._mainFile) {
                     const jsx = socket._clientPages[socket._mainFile].json;
                     const leaveEvents = jsx.leaveEvent;
-                    try {
-                        Function("currentUUID", "currentClient", `${beginCode[socket._mainFile]};${leaveEvents.map(i => i.code).join(";")};${leaveEvents.map(i => `${i.name}()`).join(";")}`)(uuid, client);
-                    } catch (e) {
-                        printer.dev.error(e);
-                    }
+                    (async () => { // it might break some functionality of _close() function, so I moved async to here
+                        try {
+                            await Function("currentUUID", "currentClient", `return (async()=>{${jsx.serverImportCode};${beginCode[socket._mainFile]};${leaveEvents.map(i => i.code).join(";")};${leaveEvents.map(i => `${i.name}()`).join(";")}})()`)(uuid, client);
+                        } catch (e) {
+                            printer.dev.error(e);
+                        }
+                    })();
                 }
                 if (t) {
                     socket.close();
@@ -663,12 +680,12 @@ class API extends EventEmitter {
                 // todo: async functions for decorated functions // todo: check if html still works
             });
             prepareCodes();
-            const onPageLoad = () => {
+            const onPageLoad = async () => {
                 if (!socket._mainFile) return;
                 const jsx = socket._clientPages[socket._mainFile].json;
                 const joinEvents = jsx.joinEvent;
                 try {
-                    Function("currentUUID", "currentClient", `${beginCode[socket._mainFile]};${joinEvents.map(i => i.code).join(";")};${joinEvents.map(i => `${i.name}()`).join(";")}`)(uuid, client);
+                    await Function("currentUUID", "currentClient", `return (async()=>{${jsx.serverImportCode};${beginCode[socket._mainFile]};${joinEvents.map(i => i.code).join(";")};${joinEvents.map(i => `${i.name}()`).join(";")}})()`)(uuid, client);
                 } catch (e) {
                     printer.dev.error(e);
                     close("internal server error");
@@ -680,7 +697,7 @@ class API extends EventEmitter {
                 socket._mainFile = cPages[1];
                 socket._URL_ = url;
                 prepareCodes();
-                onPageLoad();
+                onPageLoad().then(r => r);
             };
             ka();
             socket.on("message", async data => {
@@ -718,7 +735,7 @@ class API extends EventEmitter {
                             return close("invalid json");
                         }
                         if (typeof args !== "object" || !Array.isArray(args)) return close("invalid function args");
-                        const res = await Function("currentUUID", "currentClient", "...args", `${beginCode[page]};${fn.code};return ${fn.name}(...args)`)(uuid, client, ...args);
+                        const res = await Function("currentUUID", "currentClient", "...args", `return new Promise(async r=>{${jsx.serverImportCode};${beginCode[page]};${fn.code};r(await ${fn.name}(...args))})`)(uuid, client, ...args);
                         if (fn.r) {
                             let r;
                             try {
@@ -799,7 +816,8 @@ class API extends EventEmitter {
                 respondFunctions: k.filter(i => sr[i].r),
                 client: json.clientFunctionList,
                 clientLoad: json.clientLoadList,
-                clientNavigate: json.clientNavigateList
+                clientNavigate: json.clientNavigateList,
+                importList: json.importList.map(i => [i, (this.#importMap[i] || {}).version || ""])
             }
         };
         pk[file] = files[file].pk;
@@ -865,7 +883,7 @@ class API extends EventEmitter {
             `,${this.dev ? 1 : 0},` +
             `'${experimentalId}',${staticJSON}]`;
         await this.sendRawFile(".html",
-            `<script type=module data-rm=${r}>(async()=>{const $$CONF$$=${confJ};eval(await (await fetch("/__${__PRODUCT__}__injection__jsx__")).text())})()</script>`, req, res
+            `<script type=module data-rm=${r}>(async()=>{const $$CONF$$=${confJ};eval(await (await fetch("/${experimentalId}/__${__PRODUCT__}__injection__jsx__")).text())})()</script>`, req, res
         );
     };
 
@@ -897,7 +915,7 @@ class API extends EventEmitter {
         this.watchFile(req._Route);
         const confJ = `['${r}',${config.keepaliveTimeout > 0 ? config.clientKeepalive : -1}]`;
         await this.sendRawFile(".html", content + (this.#realtime ?
-            `<script type=module data-rm=${r}>(async()=>{const $$CONF$$=${confJ};eval(await (await fetch("/__${__PRODUCT__}__injection__html__")).text())})()</script>`
+            `<script type=module data-rm=${r}>(async()=>{const $$CONF$$=${confJ};eval(await (await fetch("/${experimentalId}/__${__PRODUCT__}__injection__html__")).text())})()</script>`
             : ""), req, res
         );
     };
@@ -931,13 +949,11 @@ class API extends EventEmitter {
         if (fromScript && !req.__socket) return res.json({error: "Unauthorized"});
         if (!isStatic && (file.endsWith(".jsx") || file.endsWith(".tsx"))) return this.renderJSX(file, content, req, res, fromScript);
         if (!isStatic && file.endsWith(".html") && !fromScript) return this.renderHTML(file, content, req, res);
-        if (file.endsWith(".css") && fromScript) {
-            file += ".js"; // todo: maybe use those weird css copies that add new functionalities?
-            content = `let st=document.createElement("style");st.innerHTML=${JSON.stringify(content.toString())};document.head.appendChild(st);export default st`;
-        }
-        if (file.endsWith(".html") && fromScript) {
-            content = `export default new DOMParser().parseFromString(${JSON.stringify(content.toString())},"text/html")`;
-            file += ".js";
+        const pH = this.preFileHandlers[file.split(".").slice(-1)[0]];
+        if (fromScript && pH) {
+            let cancelled = false;
+            pH(file, content, f => file = f, c => content = c, () => cancelled = true);
+            if (cancelled) return;
         }
         await this.sendRawFile(file, content, req, res);
     };
@@ -1253,6 +1269,7 @@ class API extends EventEmitter {
             }*/
             zip.file("time", Date.now() + "");
             zip.file("runtime", runtimeId + "");
+            zip.file("importMap", JSON.stringify(this.#importMap));
             const mainPath = path.join(this.#dir, config.srcFolder, config.main);
             const code = this.jsxToJS(fs.readFileSync(mainPath), path.extname(config.main));
             if (code instanceof Error) return exit("Couldn't build the main file!", code);
@@ -1326,6 +1343,10 @@ class API extends EventEmitter {
                 mainCode = data;
                 continue;
             }
+            if (file === "importMap") {
+                this.#importMap = JSON.parse(data.toString());
+                continue;
+            }
             //if (isExtracting) fs.writeFileSync(path.join(this.#dir, config.srcFolder, file), data);
             const folder = file.split("/")[0];
             const handler = this.scanHandlers[folder];
@@ -1359,11 +1380,11 @@ class API extends EventEmitter {
         }
         this.#jsxFunctions[file] = json;
         const clientFunctions = json.clientFunctionList;
-        inits.push(...json.serverInit.map(i => Function(`${makeBeginCode(null, clientFunctions, JSON.stringify(path.join(file)))}${i.code};${i.name}();`)));
+        inits.push(...json.serverInit.map(i => Function(`return (async()=>{${json.serverImportCode};${makeBeginCode(null, clientFunctions, JSON.stringify(path.join(file)))}${i.code};${i.name}();})()`)));
         if (!this.#buildCache) this.#buildCache = {};
         this.#buildCache[file] = data;
         return json;
-    }
+    };/*
 
     #addImport(name, file, d) {
         if (this.#importMap[name]) return file && this.#importMap[name].push(file);
@@ -1374,14 +1395,15 @@ class API extends EventEmitter {
         const addFolder = folder => {
             const actual = path.join(this.#dir, "node_modules", name, folder);
             fs.readdirSync(actual).forEach(i => {
-                if (fs.statSync(path.join(actual, i)).isFile()) this.#importMap[name][folder + (folder ? "/" : "") + i] = fs.readFileSync(path.join(actual, i));
-                else addFolder(folder + (folder ? "/" : "") + i);
+                if (fs.statSync(path.join(actual, i)).isFile()) {
+                    this.#importMap[name][folder + (folder ? "/" : "") + i] = fs.readFileSync(path.join(actual, i));
+                } else addFolder(folder + (folder ? "/" : "") + i);
             });
         };
         addFolder("");
-        this.#importMains[name] = main;
-        Object.keys(dependencies).forEach(i => this.#addImport(i, file, d));
-    };
+        this.#importMains[name] = path.join(main || "").replaceAll("\\", "/");
+        if (typeof dependencies === "object") Object.keys(dependencies).forEach(i => this.#addImport(i, file, d));
+    };*/
 
     async processMain(data) {
         if (data instanceof Buffer) data = data.toString();
@@ -1500,7 +1522,9 @@ class API extends EventEmitter {
             clientNavigateList: [],
             serverInit: [],
             joinEvent: [],
-            leaveEvent: []
+            leaveEvent: [],
+            importList: [],
+            serverImportCode: ""
         };
         const jsCode = this.jsxToJS(jsxCode, path.extname(file));
         if (jsCode instanceof Error) throw jsCode;
@@ -1513,7 +1537,9 @@ class API extends EventEmitter {
             clientNavigateList: [],
             serverInit: [],
             joinEvent: [],
-            leaveEvent: []
+            leaveEvent: [],
+            importList: [],
+            serverImportCode: ""
         };
         let newJSCode = jsCode;
         let deltaIndex = 0;
@@ -1524,7 +1550,7 @@ class API extends EventEmitter {
         const impNm = {};
         const clip = ({start, end}) => jsCode.substring(start, end);
         const fileJ = JSON.stringify(file);
-        const processFunction = (start, end, leadingComments, name, code) => {
+        const processFunction = (start, end, leadingComments, name, code, node) => {
             let isClient = true;
             for (const comment of leadingComments) {
                 const lines = comment.value.split("\n");
@@ -1532,7 +1558,10 @@ class API extends EventEmitter {
                     const t = line.replaceAll("*", "").trim();
                     const fH = this.functionDecorators[t];
                     if (fH) {
-                        if (t.startsWith("@server")) isClient = false;
+                        if (t.startsWith("@server")) {
+                            node.__modified__ = true;
+                            isClient = false;
+                        }
                         fH({start, end, name, leadingComments, code, json, replaceText});
                     }
                 }
@@ -1540,12 +1569,26 @@ class API extends EventEmitter {
             // replaceText({start: end, end}, ";U" + runtimeId + `.${name}=${name};`); read the t-odo in the init function
             if (isClient) json.clientFunctionList.push(name);
         };
+        const processImport = (name, raw) => {
+            if (this.#getPackageImport(name) === null) return;
+            if (!json.importList.includes(name)) json.importList.push(name);
+            json.serverImportCode += raw + ";";
+        };
+        // todo: cache function instances somewhere and don't do Function()() everytime, to allow generator functions to work
         traverse(ast, {
             FunctionDeclaration: ({node}) => {
                 const {leadingComments} = node;
                 if (!node.id) return;
-                if (leadingComments) processFunction(node.start, node.end, leadingComments, node.id.name, clip(node));
-                else json.clientFunctionList.push(node.id.name); // now every other function is a client function
+                processFunction(node.start, node.end, leadingComments || [], node.id.name, clip(node), node);
+            },
+            VariableDeclaration: ({node}) => {
+                const {declarations, leadingComments, kind} = node;
+                if (!declarations) return;
+                for (const dec of declarations) {
+                    const {init} = dec;
+                    if (!init || !["ArrowFunctionExpression", "FunctionExpression"].includes(init.type)) continue;
+                    processFunction(dec.start - kind.length - 1, dec.end, leadingComments || [], dec.id.name, kind + " " + clip(dec), node);
+                }
             },
             ImportDeclaration: ({node}) => {
                 if (node.type !== "ImportDeclaration") return;
@@ -1584,13 +1627,12 @@ class API extends EventEmitter {
                         nc += `const{${specMap.ImportSpecifier.map(([X, I]) => X === I ? `${X}` : `${I}:${X}`).join(",")}}=${impNm[imN]};`;
                 }
                 replaceText(node, nc);
-            },
-            Import: ({parent}) => {
-                if (parent.type !== "CallExpression") return;
-                if (parent.arguments.length >= 1) {
-                    const inside = clip(parent.arguments[0]);
-                    // hizzy prefix:
-                    replaceText(parent, impNm[inside] || `H${runtimeId}.I${runtimeId}(${inside},${fileJ})`);
+                if (node.source.type === "StringLiteral") {
+                    processImport(
+                        node.source.value,
+                        nc.replace(`H${runtimeId}.I${runtimeId}`, "import")
+                            .replace(`,${fileJ});`, ");") // todo: make this more secure?
+                    );
                 }
                 /*import * as D from "./App2";
                 import A from "./App2"
@@ -1599,6 +1641,15 @@ class API extends EventEmitter {
                 import {B as H} from "./App2";
                 import("./App2")
                 import E, * as F from "./App2";*/
+            },
+            Import: n => {
+                if (n.parent.type !== "CallExpression") return;
+                if (n.parent.arguments.length >= 1) {
+                    if (n.findParent(path => path.container && path.container.__modified__)) return;
+                    const inside = clip(n.parent.arguments[0]);
+                    // hizzy prefix:
+                    replaceText(n.parent, impNm[inside] || `H${runtimeId}.I${runtimeId}(${inside},${fileJ})`);
+                }
             },
             ExportDefaultDeclaration: ({node}) => {
                 /*
@@ -1645,15 +1696,6 @@ class API extends EventEmitter {
                 }
                 replaceText(node, nc);
             },
-            VariableDeclaration: ({node: {declarations, leadingComments, kind}}) => {
-                if (!declarations || !leadingComments || !leadingComments.length) return;
-                for (const dec of declarations) {
-                    const {init} = dec;
-                    if (!["ArrowFunctionExpression", "FunctionExpression"].includes(init.type)) continue;
-                    if (leadingComments) processFunction(dec.start - kind.length - 1, dec.end, leadingComments, dec.id.name, kind + " " + clip(dec));
-                    else json.clientFunctionList.push(dec.id.name);
-                }
-            }
             /*
             ExportNamespaceSpecifier
             ExportSpecifier
@@ -1671,6 +1713,28 @@ class API extends EventEmitter {
         if (c.error) throw c.error;
         json.code = typeof c === "string" ? c : c.code;
         return json;
+    };
+
+    #getPackageImport(name) {
+        if (this.#importMap[name]) return this.#importMap[name];
+        if (name.includes(".") || ["hizzy", "@hizzyjs/types", "react", "preact"].includes(name)) return null;
+        const p = path.join(this.#dir, "node_modules", name);
+        if (!fs.existsSync(p) || !fs.statSync(p).isDirectory()) return null;
+        return this.#importMap[name] = {
+            code: esbuild.buildSync({
+                stdin: {
+                    contents: `export * as default from ${JSON.stringify(name)}`,
+                    resolveDir: this.#dir,
+                    sourcefile: ".js",
+                    loader: "ts"
+                },
+                bundle: true,
+                minify: true,
+                format: "esm",
+                write: false
+            }).outputFiles[0].text,
+            version: require(path.join(p, "package.json")).version || ""
+        };
     };
 
     async waitBuild() {
