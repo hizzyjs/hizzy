@@ -247,12 +247,12 @@ if (isTerminal && args[0]) {
         "addons": [],
         "includeOriginalInBuild": true,
         "cache": {
-            "addons": 31536000,
-            "npm": 31536000,
-            "preact": 31536000,
-            "preact-hooks": 31536000,
-            "html-injection": 31536000,
-            "jsx-injection": 31536000,
+            "addons": 0,
+            "npm": 0,
+            "preact": 0,
+            "preact-hooks": 0,
+            "html-injection": 0,
+            "jsx-injection": 0,
             "static": {}
         },
         warnAboutTypes: true
