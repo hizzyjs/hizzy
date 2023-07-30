@@ -235,6 +235,8 @@ if (isTerminal && args[0]) {
         "listen": true,
         "main": _argv_["ts"] ? "Server.tsx" : "Server.jsx",
         "mainModule": true,
+        "baseHTML": "index.html",
+        "allowAllPackages": false,
         "checkConfig": true,
         "realtime": true,
         "static": {},
@@ -267,11 +269,15 @@ if (isTerminal && args[0]) {
         confFileName = __PRODUCT__ + "." + a;
         if (fs.existsSync(path.join(dir, confFileName))) break;
     }
+    if (_argv_["ts"] && !fs.existsSync(path.join(dir, "tsconfig.json"))) {
+        if (_argv_["debug"]) printer.dev.debug("Creating the %c/tsconfig.json&t file...", "color: orange");
+        fs.writeFileSync(path.join(dir, "tsconfig.json"), fs.readFileSync(path.join(__dirname, "tsconfig.json")));
+    }
     const confPath = path.join(dir, confFileName);
     const confExists = fs.existsSync(confPath);
     if (!confExists || !fs.statSync(confPath).isFile()) {
         if (confExists) fs.rmSync(confPath);
-        if (_argv_.debug) printer.dev.debug("Creating the %c/" + confFileName + "&t file...", "color: orange");
+        if (_argv_["debug"]) printer.dev.debug("Creating the %c/" + confFileName + "&t file...", "color: orange");
         fs.writeFileSync(confPath, `export default Hizzy.defineConfig({${_argv_["ts"] ? `\n    main: "Server.tsx"\n` : ""}});`);
     }
     let conf;
@@ -387,7 +393,7 @@ if (isTerminal && args[0]) {
         await Hizzy.init();
         if (conf.dev && (_argv_.dev === undefined || !["false", "no", "f", "n"].includes(_argv_.dev))) {
             Hizzy.dev = true;
-            await Hizzy.processMain(Hizzy.jsxToJS(fs.readFileSync(mainPath), mainExtension));
+            await Hizzy.processDevMain();
         }
         if (conf.realtime) Hizzy.enableRealtime();
         if (Hizzy.dev) {

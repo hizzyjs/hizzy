@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Loading...</title>
+    <style>
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading {
+            border: 2px solid white;
+            border-top-color: #282828;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: auto;
+            width: 32px;
+            height: 32px;
+        }
+
+        .loading-container > .loading {
+            margin-top: calc(50% - 16px);
+        }
+    </style>
+</head>
+<body>
+
+<main>
+    <!-- JSX files will be rendered in here -->
+    <div class="loading-container">
+        <div class="loading"></div> <!-- Everything in here will be replaced by the rendered JSX file -->
+    </div>
+</main>
+
+</body>
+</html>

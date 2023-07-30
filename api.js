@@ -54,6 +54,7 @@ const staticJSON = JSON.stringify(config?.static);
 // todo: a playground in the web page, update: idk if i will do this, this requires a sandbox server, i might use something like repl.it or glitch.com
 // no-odo: variable transaction? bad idea, just use functions to move them around
 // todo: test it on mac
+// todo: add a package that installs example projects: npx @hizzyjs/example example-name-here
 
 const runtimeId = random();
 const pack = s => {
@@ -573,7 +574,7 @@ class API extends EventEmitter {
     };
 
     findOptimalFile(file) {
-        return fs.existsSync(file) ? file : null;
+        return fs.existsSync(file) && fs.statSync(file).isFile() ? file : null;
     };
 
     cacheDevFile(file) {
@@ -735,7 +736,14 @@ class API extends EventEmitter {
                             return close("invalid json");
                         }
                         if (typeof args !== "object" || !Array.isArray(args)) return close("invalid function args");
-                        const res = await Function("currentUUID", "currentClient", "...args", `return new Promise(async r=>{${jsx.serverImportCode};${beginCode[page]};${fn.code};r(await ${fn.name}(...args))})`)(uuid, client, ...args);
+                        let res;
+                        let err;
+                        try {
+                            res = await Function("currentUUID", "currentClient", "...args", `return new Promise(async r=>{${jsx.serverImportCode};${beginCode[page]};${fn.code};r(await ${fn.name}(...args))})`)(uuid, client, ...args);
+                        } catch (e) {
+                            err = e;
+                        }
+                        if (err) return close("internal server error");
                         if (fn.r) {
                             let r;
                             try {
@@ -807,6 +815,9 @@ class API extends EventEmitter {
         }
         const sr = json.serverFunctions;
         const k = Object.keys(sr);
+        const nmPath = path.join(this.#dir, "node_modules");
+        const pkgL = fs.existsSync(nmPath) ? fs.readdirSync(nmPath) : [];
+        for (const pkgN of pkgL) this.#getPackageImport(pkgN);
         files[file] = {
             code,
             json,
@@ -817,7 +828,7 @@ class API extends EventEmitter {
                 client: json.clientFunctionList,
                 clientLoad: json.clientLoadList,
                 clientNavigate: json.clientNavigateList,
-                importList: json.importList.map(i => [i, (this.#importMap[i] || {}).version || ""])
+                importList: (config.allowAllPackages ? pkgL : json.importList).map(i => [i, (this.#importMap[i] || {}).version || ""])
             }
         };
         pk[file] = files[file].pk;
@@ -882,8 +893,13 @@ class API extends EventEmitter {
             `${config.keepaliveTimeout > 0 ? config.clientKeepalive : -1}` +
             `,${this.dev ? 1 : 0},` +
             `'${experimentalId}',${staticJSON}]`;
+        let base;
+        if (this.dev) {
+            const p = this.findOptimalFile(path.join(this.#dir, config.srcFolder, config.baseHTML));
+            if (p) base = this.cacheDevFile(p);
+        } else base = await this.cacheBuildFile(path.join(config.baseHTML).replaceAll("\\", "/"));
         await this.sendRawFile(".html",
-            `<script type=module data-rm=${r}>(async()=>{const $$CONF$$=${confJ};eval(await (await fetch("/${experimentalId}/__${__PRODUCT__}__injection__jsx__")).text())})()</script>`, req, res
+            `${base || ""}<script type=module data-rm=${r}>(async()=>{const $$CONF$$=${confJ};eval(await (await fetch("/${experimentalId}/__${__PRODUCT__}__injection__jsx__")).text())})()</script>`, req, res
         );
     };
 
@@ -1044,14 +1060,23 @@ class API extends EventEmitter {
             const addonPks = [];
             for (const i in addons) {
                 const pl = addons[i];
-                const m = [
+                let m = [
                     pl.module.name,
-                    (pl.module.onClientSideLoad || "") + "",
-                    (pl.module.onClientSideRendered || "") + "",
-                    (pl.module.onClientSideError || "") + ""
+                    pl.module.onClientSideLoad,
+                    pl.module.onClientSideRendered,
+                    pl.module.onClientSideError
                 ];
                 if (m.slice(1).every(i => !i)) continue;
-                if (!this.dev) for (const i in m) m[i] = m[i] ? require("uglify-js").minify(m[i]).code : "";
+                if (!this.dev) m = m.map((i, j) => {
+                    if (j === 0) return i;
+                    i = (i || "") + "";
+                    const min = require("uglify-js").minify(i, {
+                        compress: false // todo: don't disable compression completely, disable the needed options
+                        // the problem is that, minify(`(() => console.log(1); /* or anything else */ )`) -> { "code": "" }
+                    });
+                    if (i) return min.code;
+                    return "";
+                });
                 addonPks.push(m);
             }
             this.#addonCache = JSON.stringify(addonPks);
@@ -1094,6 +1119,13 @@ class API extends EventEmitter {
                     printer.raw.log("%c  ➜  Restarted the server.", "color: green");
                 }
             },
+            f: {
+                description: "re-run the main file", enabled: this.dev,
+                run: async () => {
+                    await this.processDevMain();
+                    printer.raw.log("%c  ➜  Main file has been re-run.", "color: green");
+                }
+            },
             b: {
                 description: "build", enabled: !this.dev,
                 run: async () => {
@@ -1131,6 +1163,7 @@ class API extends EventEmitter {
                     printer.raw.log("%c  ✓  All addons have been enabled.", "color: green");
                 }
             },
+            e: {enabled: false},
             q: {
                 description: "quit", enabled: true,
                 run: () => {
@@ -1405,6 +1438,11 @@ class API extends EventEmitter {
         if (typeof dependencies === "object") Object.keys(dependencies).forEach(i => this.#addImport(i, file, d));
     };*/
 
+    async processDevMain() {
+        const mainPath = path.join(this.#dir, config.srcFolder, config.main);
+        await this.processMain(this.jsxToJS(fs.readFileSync(mainPath), path.extname(mainPath)));
+    };
+
     async processMain(data) {
         if (data instanceof Buffer) data = data.toString();
         if (typeof data === "object") {
@@ -1424,8 +1462,6 @@ class API extends EventEmitter {
         try {
             fs.writeFileSync(tPath, data);
             mainResponse = await import(url.pathToFileURL(tPath));
-            // if(config.mainModule) mainResponse = await import("data:application/javascript;base64," + Buffer.from(data.toString()).toString("base64"));
-            // else Function(data.toString())();
         } catch (e) {
             rmf();
             printer.dev.error(e);
@@ -1480,25 +1516,26 @@ class API extends EventEmitter {
             for (const i of s) await makeRoute(i, u);
         };
         if (mainResponse.props.children) await makeRoute(mainResponse.props.children);
-        this.routes = routes;
         Object.freeze(routes);
+        this.routes = routes;
         const METHODS = ["all", "get", "post", "put", "delete", "patch", "options", "head"];
+        this.app._router.stack = this.app._router.stack.filter(i => !i.route); // removes all routes, good for re-run of main file
         for (const url in this.routes) {
             const {route, method, routeJSON, allow, deny, onRequest} = this.routes[url];
             if (!METHODS.includes(method)) {
                 printer.dev.warn("Invalid method: " + method + ", expected one of these: " + METHODS.join(", "));
                 continue;
             }
-            this.app[method](url, async (req, res) => {
-                // todo: make main file reloadable with custom intervals and removal of all app[method]s
+            this.app[method](url, async (req, res, nx) => {
                 req._Route = route;
                 req._RouteJSON = routeJSON;
                 req._Allow = allow;
                 req._Deny = deny;
-                let next = async () => {
+                let next = async (goActual = false) => {
+                    if (goActual) return nx();
                     if (this.dev) this.#devRender(route, req, res);
                     else await this.#buildRender(route, req, res);
-                }; // todo: add a way of doing next() and continuing on with the actual next() so they can use other routes too
+                };
                 if (typeof onRequest === "function") onRequest(req, res, next);
                 else if (typeof onRequest === "object" && Array.isArray(onRequest)) {
                     const r = (i, ...a) => {
@@ -1569,10 +1606,10 @@ class API extends EventEmitter {
             // replaceText({start: end, end}, ";U" + runtimeId + `.${name}=${name};`); read the t-odo in the init function
             if (isClient) json.clientFunctionList.push(name);
         };
-        const processImport = (name, raw) => {
-            if (this.#getPackageImport(name) === null) return;
-            if (!json.importList.includes(name)) json.importList.push(name);
-            json.serverImportCode += raw + ";";
+        const processImport = (node, ad, th, sub) => {
+            if (node.source.type !== "StringLiteral" || this.#getPackageImport(node.source.value) === null) return;
+            if (!json.importList.includes(node.source.value)) json.importList.push(node.source.value);
+            json.serverImportCode += `${ad.substring(0, ad.length - sub.length)}await Hizzy.getPkg(${th});`;
         };
         // todo: cache function instances somewhere and don't do Function()() everytime, to allow generator functions to work
         traverse(ast, {
@@ -1612,28 +1649,34 @@ class API extends EventEmitter {
                     }
                     if (specMap.ImportNamespaceSpecifier.length !== 0) {
                         const N = specMap.ImportNamespaceSpecifier[0][0];
-                        nc += `const ${N}=${impNm[imN]};`;
+                        const ad = `const ${N}=${impNm[imN]};`;
+                        nc += ad;
+                        processImport(node, ad, imN, impNm[imN] + ";");
                         if (N.length < impNm[imN].length) impNm[imN] = N;
-                        for (let i = 1; i < specMap.ImportNamespaceSpecifier.length; i++)
-                            nc += `const ${specMap.ImportNamespaceSpecifier[i][0]}=${N};`;
+                        for (let i = 1; i < specMap.ImportNamespaceSpecifier.length; i++) {
+                            const ad = `const ${specMap.ImportNamespaceSpecifier[i][0]}=${N};`;
+                            nc += ad;
+                            processImport(node, ad, imN, N + ";");
+                        }
                     }
                     if (specMap.ImportDefaultSpecifier.length !== 0) {
                         const N = specMap.ImportDefaultSpecifier[0][0];
-                        nc += `const{default:${N}}=${impNm[imN]};`;
-                        for (let i = 1; i < specMap.ImportDefaultSpecifier.length; i++)
-                            nc += `const ${specMap.ImportDefaultSpecifier[i][0]}=${N};`;
+                        const ad = `const{default:${N}}=${impNm[imN]};`;
+                        nc += ad;
+                        processImport(node, ad, imN, impNm[imN] + ";");
+                        for (let i = 1; i < specMap.ImportDefaultSpecifier.length; i++) {
+                            const ad = `const ${specMap.ImportDefaultSpecifier[i][0]}=${N};`;
+                            nc += ad;
+                            processImport(node, ad, imN, N + ";");
+                        }
                     }
-                    if (specMap.ImportSpecifier.length !== 0)
-                        nc += `const{${specMap.ImportSpecifier.map(([X, I]) => X === I ? `${X}` : `${I}:${X}`).join(",")}}=${impNm[imN]};`;
+                    if (specMap.ImportSpecifier.length !== 0) {
+                        const ad = `const{${specMap.ImportSpecifier.map(([X, I]) => X === I ? `${X}` : `${I}:${X}`).join(",")}}=${impNm[imN]};`;
+                        nc += ad;
+                        processImport(node, ad, imN, impNm[imN] + ";");
+                    }
                 }
                 replaceText(node, nc);
-                if (node.source.type === "StringLiteral") {
-                    processImport(
-                        node.source.value,
-                        nc.replace(`H${runtimeId}.I${runtimeId}`, "import")
-                            .replace(`,${fileJ});`, ");") // todo: make this more secure?
-                    );
-                }
                 /*import * as D from "./App2";
                 import A from "./App2"
                 import "./App2";
@@ -1705,6 +1748,7 @@ class API extends EventEmitter {
             ExportDefaultSpecifier
             */
         });
+        if (json.serverImportCode) json.serverImportCode = `${json.serverImportCode}`;
         const c = this.dev ? newJSCode : require("uglify-js").minify(newJSCode, {
             module: true,
             compress: {toplevel: false},
@@ -1720,7 +1764,8 @@ class API extends EventEmitter {
         if (name.includes(".") || ["hizzy", "@hizzyjs/types", "react", "preact"].includes(name)) return null;
         const p = path.join(this.#dir, "node_modules", name);
         if (!fs.existsSync(p) || !fs.statSync(p).isDirectory()) return null;
-        return this.#importMap[name] = {
+        const pkg = require(path.join(p, "package.json"));
+        const self = this.#importMap[name] = {
             code: esbuild.buildSync({
                 stdin: {
                     contents: `export * as default from ${JSON.stringify(name)}`,
@@ -1733,8 +1778,12 @@ class API extends EventEmitter {
                 format: "esm",
                 write: false
             }).outputFiles[0].text,
-            version: require(path.join(p, "package.json")).version || ""
+            version: pkg.version || "",
+            actual: undefined
         };
+        self.actual = import(url.pathToFileURL(path.join(p, pkg.main)));
+        self.actual.then(i => self.actual = i);
+        return self;
     };
 
     async waitBuild() {
@@ -1834,6 +1883,10 @@ class API extends EventEmitter {
 
     defineConfig(r) {
         return r || {};
+    };
+
+    getPkg(name) {
+        return (this.#getPackageImport(name) || {}).actual;
     };
 }
 

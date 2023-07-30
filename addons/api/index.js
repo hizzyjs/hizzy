@@ -1,20 +1,27 @@
 const {AddonModule} = Hizzy;
 const React = require("preact");
 
-const self = module.exports = class APIAddon extends AddonModule {
-    static API = function (props = {}, ...a) {
-        return React.createElement(Route, {
-            path: props.path,
-            method: props.method,
-            onRequest: async (req, res) => {
-                let r = props.handle;
-                if (typeof r === "function") r = await r(req, res);
-                if (res.headersSent) return;
-                if (typeof r === "object") return res.json(r);
-                return res.send(r.toString());
+function API(props = {}, ...a) {
+    // noinspection JSCheckFunctionSignatures
+    return React.createElement(Route, {
+        path: props.path,
+        method: props.method,
+        onRequest: async (req, res, next) => {
+            let r = props.handle;
+            if (typeof r === "function") {
+                let cn = false;
+                r = await r(req, res, () => cn = true);
+                if (cn) return next();
             }
-        }, ...a);
-    }
+            if (res.headersSent) return;
+            if (typeof r === "object") return res.json(r);
+            return res.send(r.toString());
+        }
+    }, ...a);
+}
+
+module.exports = class APIAddon extends AddonModule {
 };
 
-self.API.isRouteParent = true;
+API.isRouteParent = true;
+module.exports.API = API;

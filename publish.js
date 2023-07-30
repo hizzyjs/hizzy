@@ -1,6 +1,7 @@
 const fs = require("fs");
 const {exec} = require("child_process");
 const path = require("path");
+const {stdout} = require("node:process");
 
 const run = command => new Promise(r => {
     const proc = exec(command);
@@ -15,7 +16,7 @@ const ED = `cd "${DS}" && `;
 
 (async () => {
     let printer;
-    const request = async () => process.argv.includes("--yes-all") || (await printer.readLine()).toLowerCase() === "y";
+    const request = async () => process.argv.includes("--yes-all") ? [stdout.write("y\n")] : (await printer.readLine()).toLowerCase() === "y";
     if (!fs.existsSync("node_modules")) await run(ED + "npm install");
     else {
         printer = require("fancy-printer");
@@ -69,6 +70,8 @@ declare module "hizzy/api" {${apiSpl[1]}}`
 
     require(DS + "api.js");
 
+    fs.writeFileSync(DS + "tsconfig.json", fs.readFileSync(DS + "addons/hizzy-init/projects/ts/tsconfig.json"));
+
     const readdirRecursive = (dir, sub = 0, sep = S, exc = []) => {
         const obj = [];
         fs.readdirSync(dir).forEach(i => {
@@ -80,8 +83,25 @@ declare module "hizzy/api" {${apiSpl[1]}}`
         return obj;
     };
 
+    ///////////////////////////
+
     process.stdout.write("Want to publish create-app packages? (y/n) ");
-    if (await request()) {
+    const publishCreateApps = await request();
+    process.stdout.write("Want to publish addons? (y/n) ");
+    const publishAddons = await request();
+    const addonsToPublish = [];
+    if (publishAddons) for (const f of fs.readdirSync(DS + "addons")) {
+        if (f === "hizzy-init") continue;
+        process.stdout.write("Want to publish the addon at '/addons/" + f + "'? (y/n) ");
+        if (await request()) addonsToPublish.push(f);
+    }
+    process.stdout.write("Want to publish the package? (y/n) ");
+    const publishPackage = await request();
+
+    ///////////////////////////
+
+
+    if (publishCreateApps) {
         const Zip = require("jszip");
 
         const doFiles = async name => {
@@ -111,12 +131,11 @@ declare module "hizzy/api" {${apiSpl[1]}}`
             await run(ED + "cd ./addons/hizzy-init && npm publish --access public");
         }
     }
-    process.stdout.write("Want to publish addons? (y/n) ");
-    if (await request()) for (const f of fs.readdirSync(DS + "addons")) {
-        if (f === "hizzy-init") continue;
-        process.stdout.write("Want to publish the addon at '/addons/" + f + "'? (y/n) ");
-        if (await request()) await run(ED + "cd ./addons/" + f + " && npm publish --access public");
-    }
-    process.stdout.write("Want to publish the package? (y/n) ");
-    if (await request()) await run(ED + "npm publish --access public && cd types && npm publish --access public");
+
+
+    for (const f of addonsToPublish)
+        await run(ED + "cd ./addons/" + f + " && npm publish --access public");
+
+
+    if (publishPackage) await run(ED + "npm publish --access public && cd types && npm publish --access public");
 })();

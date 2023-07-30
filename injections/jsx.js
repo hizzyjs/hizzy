@@ -108,7 +108,7 @@ await handshookPromise;
 if (document.readyState !== "complete") await loadPromise;
 sendToSocket(CLIENT2SERVER.HANDSHAKE_RESPONSE);
 
-// todo: put nearly everything in an iframe and communicate with postMessage and the R(randomx) variable
+// thrown away idea: using iframe and postMessage(`${R} ${packet}`)
 
 ///
 let mainFile = null;
@@ -139,32 +139,10 @@ const pathJoin = (f, cd = mainFile.split("/").slice(0, -1)) => {
     }
     return p.join("/");
 };
-const htmlToReact = text => {
-    const html = new DOMParser().parseFromString(text, "text/html");
-    /*** @param t {HTMLElement | ChildNode | Document} */
-    const toReact = t => {
-        if (t instanceof Text) return t.textContent;
-        const props = {};
-        const attrList = t.attributes;
-        for (let i = 0; i < attrList.length; i++) {
-            const attr = attrList[i];
-            props[attr.name.toLowerCase()] = attr.value;
-        }
-        const l = [];
-        t.childNodes.forEach(i => l.push(toReact(i)));
-        return react.createElement(t.tagName.toLowerCase(), {
-            ...props
-            // todo: somehow fix? https://legacy.reactjs.org/docs/dom-elements.html
-        }, ...l);
-    };
-    const l = [];
-    html.childNodes.forEach(i => l.push(toReact(i)));
-    return () => react.createElement(react.Fragment, null, ...l);
-};
 const fileHandlers = {
     build: {
         html: (name, content) => {
-            exports[name] = {default: htmlToReact(content)};
+            exports[name] = {default: new DOMParser().parseFromString(content, "text/html")};
             hasExported.push(name);
             return exports[name];
         },
@@ -183,7 +161,7 @@ const fileHandlers = {
         }
     },
     external: {
-        html: (name, content) => ({default: htmlToReact(content)}),
+        html: (name, content) => ({default: new DOMParser().parseFromString(content, "text/html")}),
         css: (name, content) => {
             let st = document.createElement("style");
             st.innerHTML = content;
@@ -205,22 +183,21 @@ Hizzy.resolvePath = p => {
     return p;
 };
 const urlExport = f => ({default: "/" + Hizzy.resolvePath(f)});
+const customExports = {
+    hizzy: () => Hizzy,
+    "@hizzyjs/types": () => Hizzy,
+    react: () => react,
+    preact: () => react
+};
 const import_ = async (f, _from, extra = []) => {
     const query = new URLSearchParams(f.includes("?") ? f.split("?").slice(1).join("?") : "");
     const isURL = query.get("url") === "";
     const isRaw = query.get("raw") === "";
     if (isURL && isRaw) throw new Error("An import can't have both '?url' and '?raw'!");
-    if (f === "hizzy" || f === "@hizzyjs/types") {
-        if (isURL || isRaw) throw new Error("Cannot use the '?url' or the '?raw' on Hizzy!");
-        return Hizzy;
-    }
-    if (f === "react" || f === "preact") {
-        if (isURL || isRaw) throw new Error("Cannot use the '?url' or the '?raw' on React!");
-        return react;
-    }
-    if (addonExports[f]) {
-        if (isURL || isRaw) throw new Error("Cannot use the '?url' or the '?raw' on addons!");
-        return {default: addonExports[f]};
+    const customExp = (customExports[f] && await customExports[f]()) || addonExports[f];
+    if (customExp) {
+        if (isURL || isRaw) throw new Error("Cannot use the '?url' or the '?raw' on the import '" + f + "'!");
+        return customExp;
     }
     if (isURL) return urlExport(f);
     const relativeP = f.startsWith(".");
@@ -250,8 +227,10 @@ const import_ = async (f, _from, extra = []) => {
             if (isRaw) return {default: content, content};
             return urlExport(f);
         } else {
-            const url = "http" + (isSecure ? "s" : "") + "://" + location.host + "/" + (relativeP ? path : "__hizzy__npm__/" + files[_from].importList.find(i => i[0] === path.split("/")[0])[1] + "/" + path);
+            const npmF = (files[_from].importList.find(i => i[0] === path.split("/")[0]) || [])[1];
+            const url = "http" + (isSecure ? "s" : "") + "://" + location.host + "/" + (relativeP ? path : "__hizzy__npm__/" + npmF + "/" + path);
             d.cookie = "__hizzy__=" + key;
+            if (!relativeP && !npmF) throw new Error("Module not found: " + path);
             let a;
             try {
                 if (isRaw) {
@@ -402,12 +381,13 @@ addEventListener("popstate", async e => {
     await fetchPage(e.state["__hizzy" + R + "__"], false);
 });
 let oldEnds = {};
+const baseHTML = d.documentElement.innerHTML;
 const loadPage = async file => {
     if (!firstRender) renderPromise = new Promise(r => onRender = r);
     Object.values(oldEnds).forEach(i => i());
     oldEnds = {};
     firstRender = false;
-    d.documentElement.innerHTML = "";
+    d.documentElement.innerHTML = baseHTML;
     for (const t of timeouts) clearTimeout(t);
     timeouts = [];
     try {
@@ -415,8 +395,15 @@ const loadPage = async file => {
         if (exp && exp.default) {
             let def = exp.default;
             if (typeof def === "function") def = react.h(def, null);
+            let mainDocument = d.querySelector("main");
+            if (!mainDocument) {
+                if (baseHTML) {
+                    mainDocument = d.createElement("main");
+                    d.body.appendChild(mainDocument);
+                } else mainDocument = d.body;
+            }
             if (def.__v) {
-                react.render(def, d.body);
+                react.render(def, mainDocument);
                 const l = clientFunctions[file].load;
                 oldEnds = clientFunctions[file].navigate;
                 for (const i in l) l[i]();
