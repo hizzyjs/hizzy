@@ -2,21 +2,71 @@
 
 import fs from "fs";
 import path from "path";
-import chalk from "chalk";
 import Zip from "jszip";
 import {exec} from "child_process";
 import url from "url";
 import {cwd, exit, stdin, stdout} from "node:process";
 
+const C = {
+    // Modifiers
+    reset: [0, 0],
+    bold: [1, 22],
+    dim: [2, 22],
+    italic: [3, 23],
+    underline: [4, 24],
+    inverse: [7, 27],
+    hidden: [8, 28],
+    strikethrough: [9, 29],
+
+    black: [30, 39],
+    red: [31, 39],
+    green: [32, 39],
+    yellow: [33, 39],
+    blue: [34, 39],
+    magenta: [35, 39],
+    cyan: [36, 39],
+    white: [37, 39],
+
+    // Bright color
+    blackBright: [90, 39],
+    redBright: [91, 39],
+    greenBright: [92, 39],
+    yellowBright: [93, 39],
+    blueBright: [94, 39],
+    magentaBright: [95, 39],
+    cyanBright: [96, 39],
+    whiteBright: [97, 39],
+
+    bgBlack: [40, 49],
+    bgRed: [41, 49],
+    bgGreen: [42, 49],
+    bgYellow: [43, 49],
+    bgBlue: [44, 49],
+    bgMagenta: [45, 49],
+    bgCyan: [46, 49],
+    bgWhite: [47, 49],
+
+    // Bright color
+    bgBlackBright: [100, 49],
+    bgRedBright: [101, 49],
+    bgGreenBright: [102, 49],
+    bgYellowBright: [103, 49],
+    bgBlueBright: [104, 49],
+    bgMagentaBright: [105, 49],
+    bgCyanBright: [106, 49],
+    bgWhiteBright: [107, 49]
+};
+Object.keys(C).forEach(i => C[i] = r => `\x1b[${C[i][0]}m${r}\x1b[${C[i][0]}m`);
+
 const makeLogger = (c = "") => str => {
-    const t = c + chalk.reset(str);
+    const t = c + C.reset(str);
     stdout.write(t);
     return t.replaceAll(CLEAR, "").length;
 }
 const log = makeLogger();
-log.success = makeLogger(chalk.greenBright("✓ "));
-log.fail = makeLogger(chalk.redBright("× "));
-log.question = makeLogger(chalk.blueBright("? "));
+log.success = makeLogger(C.greenBright("✓ "));
+log.fail = makeLogger(C.redBright("× "));
+log.question = makeLogger(C.blueBright("? "));
 const run = (command, p = true) => new Promise(r => {
     const proc = exec(command);
     if (p) proc.stdout.on("data", d => stdout.write(d));
@@ -37,7 +87,7 @@ const SHOW = "\x1b[?25h";
 const ask = {
     selection: async (question, list, def = 0) => new Promise(r => {
         let current = def;
-        const currTxt = () => list.map((i, j) => current === j ? chalk.underline(chalk.blueBright(chalk.bold(i))) : i).join(` ${chalk.gray("/")} `);
+        const currTxt = () => list.map((i, j) => current === j ? C.underline(C.blueBright(C.bold(i))) : i).join(` ${C.gray("/")} `);
         const len1 = log.question(question);
         let len2 = log(currTxt());
         stdin.resume();
@@ -55,10 +105,10 @@ const ask = {
             if (!(text instanceof Buffer)) return;
             const str = text.toString();
             if (text.length === 1 && text[0] === 0x3) {
-                end(chalk.redBright("×"));
+                end(C.redBright("×"));
                 return exit();
             }
-            if (text.length === 1 && text[0] === 0xd) return end(chalk.greenBright("✓") + "\n");
+            if (text.length === 1 && text[0] === 0xd) return end(C.greenBright("✓") + "\n");
             if (str === ARROW_LEFT) current--;
             else if (str === ARROW_RIGHT || str === "\t") current++;
             else return;
@@ -91,10 +141,10 @@ const ask = {
             if (!(text instanceof Buffer)) return;
             const str = text.toString();
             if (text.length === 1 && text[0] === 0x3) {
-                end(chalk.redBright("×"));
+                end(C.redBright("×"));
                 return exit();
             }
-            if (text.length === 1 && text[0] === 0xd) return end(chalk.greenBright("✓") + "\n");
+            if (text.length === 1 && text[0] === 0xd) return end(C.greenBright("✓") + "\n");
             if (text.length === 1 && (text[0] === 0x8 || text[0] === 0x7f)) {
                 const cl = content.length;
                 const cn = cl - 1 - cursor;
@@ -134,22 +184,22 @@ const ask = {
 };
 
 const name = await ask.text(
-    "What is your project named? " + chalk.gray("» "), chalk.gray("my-app")
+    "What is your project named? " + C.gray("» "), C.gray("my-app")
 );
 const hasTS = await ask.selection(
-    "Would you like to use " + chalk.blueBright("TypeScript") + "? " + chalk.gray("» "),
+    "Would you like to use " + C.blueBright("TypeScript") + "? " + C.gray("» "),
     ["No", "Yes"], 0
 );
 const hasTailwindCSS = await ask.selection(
-    "Would you like to use " + chalk.blueBright("Tailwind CSS") + "? " + chalk.gray("» "),
+    "Would you like to use " + C.blueBright("Tailwind CSS") + "? " + C.gray("» "),
     ["No", "Yes"], 0
 );
 const initGit = await ask.selection(
-    "Would you like to initialize " + chalk.blueBright("git") + "? " + chalk.gray("» "),
+    "Would you like to initialize " + C.blueBright("git") + "? " + C.gray("» "),
     ["No", "Yes"], 0
 );
 const hasHizzy = await ask.selection(
-    "Would you like to install the " + chalk.blueBright("hizzy") + " for intellisense? " + chalk.gray("» "),
+    "Would you like to install the " + C.blueBright("hizzy") + " for intellisense? " + C.gray("» "),
     ["No", "Yes"], 1
 );
 
@@ -159,18 +209,20 @@ if (hasTS) packages.push("@types/react");
 if (hasTailwindCSS) packages.push("tailwindcss", "postcss");
 if (packages.length) {
     const customizeInstaller = await ask.selection(
-        "Would you like to customize the " + chalk.blueBright("default installer(npm)") + "? " + chalk.gray("» "),
+        "Would you like to customize the " + C.blueBright("default installer(npm)") + "? " + C.gray("» "),
         ["No", "Yes"], 0
     );
     let installer = "npm";
     if (customizeInstaller) installer = await ask.text(
-        "What " + chalk.blueBright("installer") + " would you like to be used? " + chalk.gray("» "), chalk.gray("npm")
+        "What " + C.blueBright("installer") + " would you like to be used? " + C.gray("» "), C.gray("npm")
     );
 }
 
 const startTime = Date.now();
 
-// const file = ["js", "twjs", "ts", "twts"][(hasTS << 1) + hasTailwindCSS];
+// const file = ["js", "tw-js", "ts", "tw-ts"][(hasTS << 1) + hasTailwindCSS];
+// Todo: I would appreciate someone with the knowledge of tailwind to help me make these templates!
+
 const file = ["js", "ts"][hasTS];
 const zip = new Zip;
 await zip.loadAsync(fs.readFileSync(path.dirname(url.fileURLToPath(import.meta.url)) + "/dist/" + file + ".zip"));
@@ -194,6 +246,7 @@ fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({
         dev: "npx hizzy -d",
         production: "npx hizzy -d=no"
     },
+    type: "module",
     keywords: [],
     author: "",
     license: "ISC"
@@ -219,13 +272,13 @@ if (packages.length) {
     const start = Date.now();
     log("\n");
     await run(st + "npm install -D " + packages.join(" "), false);
-    log.success("Installed packages: " + packages.map(i => chalk.blueBright(i)).join(", ") + " in " + chalk.greenBright((Date.now() - start) / 1000 + "s") + "\n\n");
+    log.success("Installed packages: " + packages.map(i => C.blueBright(i)).join(", ") + " in " + C.greenBright((Date.now() - start) / 1000 + "s") + "\n\n");
 }
 if (initGit) {
     const start = Date.now();
     await run(st + "git init", false);
-    log.success("Initialized a git repository in " + chalk.greenBright((Date.now() - start) / 1000 + "s") + "\n\n");
+    log.success("Initialized a git repository in " + C.greenBright((Date.now() - start) / 1000 + "s") + "\n\n");
 }
 fs.rmSync(path.join(dir, "package-lock.json"));
-log.success("Your project has been created at " + chalk.greenBright(dir) + " in " + chalk.greenBright((Date.now() - startTime) / 1000 + "s") + "\n\n");
-log.success("You can now run your project by first typing " + chalk.greenBright(`cd ${name}`) + " to enter your project's directory, then typing " + chalk.greenBright("npx hizzy") + " to start your project!\n");
+log.success("Your project has been created at " + C.greenBright(dir) + " in " + C.greenBright((Date.now() - startTime) / 1000 + "s") + "\n\n");
+log.success("You can now run your project by first typing " + C.greenBright(`cd ${name}`) + " to enter your project's directory, then typing " + C.greenBright("npx hizzy") + " to start your project!\n");

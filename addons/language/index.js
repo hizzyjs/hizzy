@@ -53,7 +53,7 @@ module.exports = class LanguageAddon extends AddonModule {
                     }
                 }
             });
-            return Lang;
+            return {default: Lang};
         }).toString()
             .replace("$conf", JSON.stringify([
                 this.options.default || Object.keys(container)[0],

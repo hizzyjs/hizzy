@@ -1,6 +1,6 @@
 {
   "type": "module",
   "dependencies": {
-    "@hizzyjs/helmet": "latest"
+    "@hizzyjs/html2react": "latest"
   }
 }

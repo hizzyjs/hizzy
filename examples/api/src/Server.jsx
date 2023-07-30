@@ -1,9 +1,7 @@
-import ApiAddon from "@hizzyjs/api";
-
-const {API} = ApiAddon;
+import {API} from "@hizzyjs/api";
 
 export default <Routes>
-    <Route path="/" route="./App.jsx"/>
+    <API path="/" handle={"hello, world!"}/>
     <API path="/a" handle={{a: "b"}}/>
     <API path="/b" handle={req => req.headers.referer ? "good" : "bad!"}/>
 </Routes>;

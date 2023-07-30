@@ -1,0 +1,11 @@
+{
+  "name": "@hizzyjs/html2react",
+  "description": "Hizzy's official html to react support",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hizzyjs/hizzy/tree/main/addons/html2react"
+  },
+  "license": "MIT"
+}

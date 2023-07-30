@@ -65,20 +65,22 @@ module.exports = class ImagePlusAddon extends AddonModule {
     onEnable() {
         Hizzy.preRawSend.push(this.#cb);
         this.onClientSideLoad = () => {
-            return function (props) {
-                props = props || {};
-                const src = props.src || "";
-                const {width, height, actualWidth, actualHeight} = props;
-                return Hizzy.createElement("div", {
-                    children: [
-                        Hizzy.createElement("img", {
-                            src: `${props.src}${src.includes("?") ? "" : "?"}&__blur__=1&__blur__width__=${width || 100}&__blur__height=${height || 100}`,
-                            width: actualWidth, height: actualHeight,
-                            style: `filter: blur(${props.blur || "5px"})`
-                        }),
-                        Hizzy.createElement("img", {src: props.src, width: actualWidth, height: actualHeight})
-                    ]
-                });
+            return {
+                default: function (props) {
+                    props = props || {};
+                    const src = props.src || "";
+                    const {width, height, actualWidth, actualHeight} = props;
+                    return Hizzy.createElement("div", {
+                        children: [
+                            Hizzy.createElement("img", {
+                                src: `${props.src}${src.includes("?") ? "" : "?"}&__blur__=1&__blur__width__=${width || 100}&__blur__height=${height || 100}`,
+                                width: actualWidth, height: actualHeight,
+                                style: `filter: blur(${props.blur || "5px"})`
+                            }),
+                            Hizzy.createElement("img", {src: props.src, width: actualWidth, height: actualHeight})
+                        ]
+                    });
+                }
             };
         };
     };

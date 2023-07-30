@@ -35,6 +35,8 @@ type HizzyConfiguration = {
     listen?: boolean,
     main?: string,
     mainModule?: boolean,
+    baseHTML?: string,
+    allowAllPackages?: boolean,
     checkConfig?: boolean,
     realtime?: boolean,
     https?: boolean,
@@ -213,6 +215,8 @@ declare class APIClass {
     jsxToJS(code: string | Buffer, extension: string): string;
 
     processMain(code: string | Buffer): Promise<void>;
+
+    processDevMain(): Promise<void>;
 
     getCookie(cookies: string, cookie: string): string | null;
 
