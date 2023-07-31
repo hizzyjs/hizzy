@@ -866,7 +866,7 @@ class API extends EventEmitter {
                 };
                 d("");
             } else ls = Object.keys(this.#buildCache).filter(i => !deny.includes(i));
-        } else if (ls === "auto") ls = json.fileImportList; // todo: if nested routes have auto, it won't really work as expected
+        } else if (ls === "auto") ls = json.fileImportList;
         for (let f of ls) {
             let c;
             const ch = async s => {
@@ -1525,7 +1525,7 @@ class API extends EventEmitter {
 
                 let allow = u.allow === "*" ? "*" : s.props.allow;
                 if (allow === undefined) allow = "auto";
-                if (allow === "*" || allow === "auto") u.allow = allow;
+                if (allow === "*") u.allow = allow;
                 if (Array.isArray(allow)) u.allow = [...new Set([...u.allow, ...allow])];
 
                 let deny = u.deny === "*" ? "*" : s.props.deny;
