@@ -1,0 +1,1 @@
+export default "im from the App2.jsx file!";

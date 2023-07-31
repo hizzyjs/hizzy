@@ -13,7 +13,7 @@ type RouteComponent = (props: {
     path: string | Location,
     route?: string,
     method?: Method,
-    allow?: string[] | "*",
+    allow?: string[] | "*" | "auto",
     deny?: string[] | "*",
     // todo: a request event class, maybe a combination of request and response
     onRequest?: onRequestFunction<void | Promise<void>>[] | onRequestFunction<void | Promise<void>>,

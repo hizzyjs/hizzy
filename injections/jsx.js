@@ -156,7 +156,9 @@ if (!__react) location.reload();
 const react = __react;
 Object.assign(Hizzy, __react, __hooks);
 const ADDONS = await (await fetch("/" + R2 + "/__hizzy__addons__")).json();
-d.cookie = "__hizzy__=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+const rst = () => d.cookie = "__hizzy__=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+const stb = () => d.cookie = "__hizzy__=" + key;
+rst();
 const pathJoin = (f, cd = mainFile.split("/").slice(0, -1)) => {
     const p = [...cd];
     for (const i of f.split("/")) {
@@ -224,8 +226,11 @@ const import_ = async (f, _from, extra = []) => {
     if (isURL) return urlExport(f);
     const relativeP = f.startsWith(".");
     const path = pathJoin(f.split("?")[0].split("#")[0]);
-    const file = files[path] || files[path + ".jsx"] || files[path + ".tsx"];
-    const fName = files[path] ? path : (files[path + ".jsx"] ? path + ".jsx" : path + ".tsx");
+
+    let fName = path;
+    for (const a of ["tsx", "jsx", "ts", "js"]) if (!files[fName]) fName = path + "." + a;
+    const file = files[fName];
+
     const _fExtSpl = fName.split(".");
     const fExt = _fExtSpl.length <= 1 ? "" : _fExtSpl[_fExtSpl.length - 1];
     const _fExtSplAct = path.split(".");
@@ -251,17 +256,19 @@ const import_ = async (f, _from, extra = []) => {
             if (isRaw) return {default: content, content};
             return urlExport(f);
         } else {
-            const npmF = (files[_from].importList.find(i => i[0] === path.split("/")[0]) || [])[1];
-            const url = "http" + (isSecure ? "s" : "") + "://" + location.host + "/" + (relativeP ? path : "__hizzy__npm__/" + npmF + "/" + path);
-            d.cookie = "__hizzy__=" + key;
-            if (!relativeP && !npmF) throw new Error("Module not found: " + path);
+            const npmV = (files[_from].importList.find(i => i[0] === path.split("/")[0]) || [])[1];
+            if (!relativeP && !npmV) throw new Error("Module not found: " + path);
+            const url = "http" + (isSecure ? "s" : "") + "://" + location.host + "/" + (relativeP ? path : "__hizzy__npm__/" + npmV + "/" + path);
             let a;
             let res;
             let content;
             try {
+                stb();
                 res = await fetch(url, {headers: {"sec-fetch-dest": "script"}});
+                rst();
                 content = fetchCache[f] = fetchCache[f] ?? await res.text();
-                if (res.type !== "application/javascript") {
+                const type = res.headers.get("Content-Type").split(";")[0].trim();
+                if (type !== "application/javascript") {
                     const fH = fileHandlers.assets[fExtAct];
                     if (fH) {
                         hasExported.push(fName);
@@ -278,7 +285,7 @@ const import_ = async (f, _from, extra = []) => {
             } catch (e) {
                 throw e;
             } finally {
-                d.cookie = "__hizzy__=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+                rst();
             }
             return a;
         }
@@ -360,33 +367,36 @@ const completePage = async (p, push) => {
 const fetchPage = async (p, push = true) => {
     p = pathJoin(p, location.pathname.split("/").slice(1, -1));
     const actual = p.split("?")[0].split("#")[0];
-    d.cookie = "__hizzy__=" + key;
     try {
         if (pageCache[actual]) {
             const page = pageCache[actual];
             mainFile = page.mainFile;
             files = page.files;
+            stb();
             await fetch("/" + p, {
                 headers: {
                     "hizzy-dest": "script",
                     "hizzy-cache": "yes"
                 }
             });
+            rst();
         } else {
             const pUuid = crypto.randomUUID();
             const wait = expectPayload(pUuid, p, push);
+            stb();
             await fetch("/" + p, {
                 headers: {
                     "hizzy-dest": "script",
                     "hizzy-payload-id": pUuid
                 }
             }); // todo: send a packet instead? but it should also trigger GET route, if client wants to protect that url
+            rst();
             await wait;
         }
     } catch (e) {
         throw e;
     } finally {
-        d.cookie = "__hizzy__=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+        rst();
     }
     await completePage(p, push);
 };

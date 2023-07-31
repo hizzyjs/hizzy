@@ -644,7 +644,7 @@ class API extends EventEmitter {
                 if (socket._handshook && isJSX) if (socket._mainFile) {
                     const jsx = socket._clientPages[socket._mainFile].json;
                     const leaveEvents = jsx.leaveEvent;
-                    (async () => { // it might break some functionality of _close() function, so I moved async to here
+                    (async () => { // it could break some functionality of _close() function, so I moved async to here
                         try {
                             await Function("currentUUID", "currentClient", `return (async()=>{${jsx.serverImportCode};${beginCode[socket._mainFile]};${leaveEvents.map(i => i.code).join(";")};${leaveEvents.map(i => `${i.name}()`).join(";")}})()`)(uuid, client);
                         } catch (e) {
@@ -798,7 +798,7 @@ class API extends EventEmitter {
         return server_;
     };
 
-    async #builtJSX(file, code, req, res, files, pk, ls) {
+    async #builtJSX(file, code, req, res, files, pk) {
         file = path.join(file).replaceAll("\\", "/");
         if (files[file] || res.headersSent) return;
         if (this.#builtJSXCache[file]) {
@@ -845,33 +845,48 @@ class API extends EventEmitter {
             }
         };
         pk[file] = files[file].pk;
-        if (!ls) {
-            ls = req._Allow;
-            const deny = req._Deny;
-            if (deny === "*") ls = [];
-            else if (ls === "*") {
-                if (this.dev) {
-                    ls = [];
-                    const d = h => {
-                        const p = path.join(this.#dir, config.srcFolder, h).replaceAll("\\", "/");
-                        const fl = fs.readdirSync(p);
-                        for (const i of fl) {
-                            const fl = path.join(p, i).replaceAll("\\", "/");
-                            if (!fs.existsSync(fl)) return;
-                            if (fs.statSync(fl).isFile()) {
-                                const p = (h ? h + "/" : "") + i;
-                                if (!deny.includes(p)) ls.push(p);
-                            } else d((h ? h + "/" : "") + i)
-                        }
-                    };
-                    d("");
-                } else ls = Object.keys(this.#buildCache).filter(i => !deny.includes(i));
-            }
-        }
-        for (const f of ls) {
+        if (!this.dev) this.#builtJSXCache[file] = files[file];
+        let ls = req._Allow;
+        const deny = req._Deny;
+        if (deny === "*") ls = [];
+        else if (ls === "*") {
+            if (this.dev) {
+                ls = [];
+                const d = h => {
+                    const p = path.join(this.#dir, config.srcFolder, h).replaceAll("\\", "/");
+                    const fl = fs.readdirSync(p);
+                    for (const i of fl) {
+                        const fl = path.join(p, i).replaceAll("\\", "/");
+                        if (!fs.existsSync(fl)) return;
+                        if (fs.statSync(fl).isFile()) {
+                            const p = (h ? h + "/" : "") + i;
+                            if (!deny.includes(p)) ls.push(p);
+                        } else d((h ? h + "/" : "") + i)
+                    }
+                };
+                d("");
+            } else ls = Object.keys(this.#buildCache).filter(i => !deny.includes(i));
+        } else if (ls === "auto") ls = json.fileImportList; // todo: if nested routes have auto, it won't really work as expected
+        for (let f of ls) {
             let c;
-            if (this.dev) c = this.cacheDevFile(path.join(this.#dir, config.srcFolder, f).replaceAll("\\", "/"));
-            else c = await this.cacheBuildFile(f);
+            const ch = async s => {
+                if (this.dev) {
+                    const pt = path.join(this.#dir, config.srcFolder, s);
+                    if (!fs.existsSync(pt) || !fs.statSync(pt).isFile()) return;
+                    return this.cacheDevFile(pt);
+                } else return await this.cacheBuildFile(s);
+            };
+            const pR = path.join(f).replaceAll("\\", "/");
+            let p = pR;
+            for (const a of ["tsx", "jsx", "ts", "js"]) {
+                c = await ch(p);
+                if (c === undefined) p = pR + "." + a;
+                else {
+                    f = p;
+                    break;
+                }
+            }
+            if (files[f] || c === undefined) continue;
             if (!c) c = "";
             this.watchFile(f);
             if (f.endsWith(".jsx") || f.endsWith(".tsx")) await this.#builtJSX(f, c, req, res, files, pk);
@@ -889,7 +904,6 @@ class API extends EventEmitter {
                 pk[f] = c;
             }
         }
-        if (!this.dev) this.#builtJSXCache[file] = files[file];
     };
 
     async renderJSX(file, code, req, res, fromScript = false) {
@@ -1509,9 +1523,9 @@ class API extends EventEmitter {
                     return exit("Cannot add multiple routes to the same endpoint: " + p);
                 const r = path.join(s.props.route || "");
 
-                let allow = u.allow === "*" ? "*" : s.props.allow; // todo: add allow="auto"
-                if (allow === undefined) allow = "*";
-                if (allow === "*") u.allow = "*";
+                let allow = u.allow === "*" ? "*" : s.props.allow;
+                if (allow === undefined) allow = "auto";
+                if (allow === "*" || allow === "auto") u.allow = allow;
                 if (Array.isArray(allow)) u.allow = [...new Set([...u.allow, ...allow])];
 
                 let deny = u.deny === "*" ? "*" : s.props.deny;
@@ -1521,7 +1535,7 @@ class API extends EventEmitter {
 
                 const msg = "Route '" + r + "'s 'allow' property is invalid, expected \"*\" or an array of strings, got: ";
                 if (typeof allow === "string") {
-                    if (allow !== "*") return exit(msg, allow);
+                    if (allow !== "*" && allow !== "auto") return exit(msg, allow);
                 } else if (typeof allow !== "object" || !Array.isArray(allow) || allow.some(i => typeof i !== "string")) return exit(msg, allow);
                 const msg2 = "Route '" + r + "'s 'deny' property is invalid, expected \"*\" or an array of strings, got: ";
                 if (typeof deny === "string") {
@@ -1600,6 +1614,7 @@ class API extends EventEmitter {
             joinEvent: [],
             leaveEvent: [],
             importList: [],
+            fileImportList: [],
             serverImportCode: ""
         };
         let newJSCode = jsCode;
@@ -1630,10 +1645,17 @@ class API extends EventEmitter {
             // replaceText({start: end, end}, ";U" + runtimeId + `.${name}=${name};`); read the t-odo in the init function
             if (isClient) json.clientFunctionList.push(name);
         };
+        const actualProcessImport = (source, s) => {
+            if (source.type !== "StringLiteral") return;
+            if (this.#getPackageImport(source.value) !== null) {
+                if (!json.importList.includes(source.value)) {
+                    json.importList.push(source.value);
+                    if (s) json.serverImportCode += s;
+                }
+            } else if (!json.fileImportList.includes(source.value)) json.fileImportList.push(source.value);
+        };
         const processImport = (node, ad, th, sub) => {
-            if (node.source.type !== "StringLiteral" || this.#getPackageImport(node.source.value) === null) return;
-            if (!json.importList.includes(node.source.value)) json.importList.push(node.source.value);
-            json.serverImportCode += `${ad.substring(0, ad.length - sub.length)}await Hizzy.getPkg(${th});`;
+            actualProcessImport(node.source, `${ad.substring(0, ad.length - sub.length)}await Hizzy.getPkg(${th});`);
         };
         // todo: cache function instances somewhere and don't do Function()() everytime, to allow generator functions to work
         traverse(ast, {
@@ -1659,7 +1681,10 @@ class API extends EventEmitter {
                 if (!impNm[imN]) impNm[imN] = df;
                 let nc = "";
                 if (node.specifiers.length === 0) {
-                    if (impNm[imN] === df) nc += df;
+                    if (impNm[imN] === df) {
+                        actualProcessImport(node.source);
+                        nc += df;
+                    }
                 } else {
                     const specMap = {
                         ImportDefaultSpecifier: [],
@@ -1714,6 +1739,7 @@ class API extends EventEmitter {
                 if (n.parent.arguments.length >= 1) {
                     if (n.findParent(path => path.container && path.container.__modified__)) return;
                     const inside = clip(n.parent.arguments[0]);
+                    actualProcessImport(n.parent.arguments[0]);
                     // hizzy prefix:
                     replaceText(n.parent, impNm[inside] || `H${runtimeId}.I${runtimeId}(${inside},${fileJ})`);
                 }
