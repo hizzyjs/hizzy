@@ -320,7 +320,7 @@ if (isTerminal && args[0]) {
         conf.static = {};
         for (const i of arr) conf.static[i] = i;
     }
-    Object.freeze(conf);
+    // Object.freeze(conf); moved
     self.config = conf;
 
     if (conf.warnAboutTypes) {
@@ -353,16 +353,22 @@ if (isTerminal && args[0]) {
     const apiMinPath = path.join(__dirname, "api.min.js");
     global[__PRODUCT_U__] = new (require(fs.existsSync(apiPath) ? apiPath : apiMinPath))(dir);
     if (conf.fileRefresh) Hizzy.autoRefresh = true;
-    const mainPath = path.join(dir, conf.srcFolder, conf.main);
-    const mainExtension = path.extname(mainPath);
+    let mainPath = path.join(dir, conf.srcFolder, conf.main);
+    let mainExtension = path.extname(mainPath);
     if (!fs.existsSync(mainPath)) {
-        printer.dev.debug("Creating the %c/src/" + conf.main + "&t file...", "color: orange");
-        fs.writeFileSync(mainPath, {
-            ".jsx": `export default <Routes>
+        const tsxP = mainPath.substring(0, mainPath.length - 3) + "tsx";
+        if (mainExtension === ".jsx" && fs.existsSync(tsxP)) {
+            conf.main = conf.main.substring(0, conf.main.length - 3) + "tsx";
+        } else {
+            printer.dev.debug("Creating the %c/src/" + conf.main + "&t file...", "color: orange");
+            fs.writeFileSync(mainPath, {
+                ".jsx": `export default <Routes>
     <Route path="/" route="./App.jsx"/>
 </Routes>;`
-        }[mainExtension]);
+            }[mainExtension]);
+        }
     }
+    Object.freeze(conf);
     if (_argv_.build) {
         _argv_["just-build"] = true;
         Hizzy.build().then(() => process.exit());
