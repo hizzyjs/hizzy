@@ -1,6 +1,6 @@
 // noinspection TypeScriptUMDGlobal
 
-const [R, R2, T, TIMEOUT, DEV, EXP, STATIC] = $$CONF$$;
+const [R, R2, TIMEOUT, DEV, EXP, STATIC] = $$CONF$$;
 const {CLIENT2SERVER, SERVER2CLIENT} = {
     CLIENT2SERVER: {
         HANDSHAKE_RESPONSE: "0", // agreed on shaking the hand
@@ -18,11 +18,13 @@ const {CLIENT2SERVER, SERVER2CLIENT} = {
         CLIENT_FUNCTION_REQUEST: "2", // requested to run a client-sided function
         SERVER_FUNCTION_RESPONSE: "3", // the response got from running a function with the @server decorator
         SURE_HANDSHAKE: "4", // server agreed on shaking the hand as well, what a friendship!
+        PAGE_PAYLOAD: "5",
         "0": "FILE_REFRESH",
         "1": "HANDSHAKE_REQUESTED",
         "2": "CLIENT_FUNCTION_REQUEST",
         "3": "SERVER_FUNCTION_RESPONSE",
-        "4": "SURE_HANDSHAKE"
+        "4": "SURE_HANDSHAKE",
+        "5": "PAGE_PAYLOAD"
     }
 };
 const w = window;
@@ -53,6 +55,58 @@ const sendToSocket = content => worker.postMessage(content);
 let onRender;
 let renderPromise = new Promise(r => onRender = r);
 let firstRender = true;
+const expecting = {};
+const expectPayload = async (id, p, push) => {
+    expecting[id] = [null, p, push];
+    return await new Promise(r => expecting[id][0] = r);
+};
+const messageHandler = {
+    [SERVER2CLIENT.FILE_REFRESH]: async () => {
+        pageCache = {};
+        await reloadPage();
+    },
+    [SERVER2CLIENT.HANDSHAKE_REQUESTED]: async () => onHandshook(),
+    [SERVER2CLIENT.CLIENT_FUNCTION_REQUEST]: async m => {
+        await renderPromise;
+        const spl = m.split(":");
+        const id = spl[0];
+        const code = spl.slice(1).join(":");
+        try {
+            const res = runCode(code, [
+                [`__hizzy_run${R}__`, clientFunctions]
+            ]);
+            sendToSocket(CLIENT2SERVER.CLIENT_FUNCTION_RESPONSE + "0" + id + ":" + JSON.stringify(res));
+        } catch (e) {
+            console.error(e);
+            sendToSocket(CLIENT2SERVER.CLIENT_FUNCTION_RESPONSE + "1" + id + ":" + e.message);
+        }
+    },
+    [SERVER2CLIENT.SERVER_FUNCTION_RESPONSE]: async m => {
+        const spl = m.split(":");
+        const evalId = spl[0];
+        const res = spl.slice(1).join(":");
+        evalResponses[evalId](res === "undefined" ? undefined : JSON.parse(res));
+    },
+    //[SERVER2CLIENT.SURE_HANDSHAKE]: async () => onHandshookSure(),
+    [SERVER2CLIENT.PAGE_PAYLOAD]: async m => {
+        const spl = m.split("\x00");
+        if (spl.length === 1) {
+            try {
+                const j = JSON.parse(spl[0]);
+                console.error(j.error || j);
+            } catch (e) {
+                console.error("Couldn't parse invalid JSON.");
+                console.error(e);
+            }
+            return;
+        }
+        mainFile = JSON.parse(spl[0]);
+        files = JSON.parse(spl.slice(2).join("\x00"));
+        const cb = expecting[spl[1]];
+        if (Array.isArray(cb) && typeof cb[0] === "function") cb[0]();
+        if (!spl[1]) onHandshookSure();
+    }
+};
 worker.addEventListener("message", async event => {
     const E = JSON.parse(event.data);
     switch (E.event) {
@@ -61,34 +115,10 @@ worker.addEventListener("message", async event => {
             location.reload();
             break;
         case "message":
-            let m = E.data.toString();
-            if (m[0] === SERVER2CLIENT.FILE_REFRESH) {
-                pageCache = {};
-                await reloadPage();
-            }
-            if (m[0] === SERVER2CLIENT.HANDSHAKE_REQUESTED) onHandshook();
-            if (m[0] === SERVER2CLIENT.CLIENT_FUNCTION_REQUEST) {
-                await renderPromise;
-                const spl = m.substring(1).split(":");
-                const id = spl[0];
-                const code = spl.slice(1).join(":");
-                try {
-                    const res = runCode(code, [
-                        [`__hizzy_run${R}__`, clientFunctions]
-                    ]);
-                    sendToSocket(CLIENT2SERVER.CLIENT_FUNCTION_RESPONSE + "0" + id + ":" + JSON.stringify(res));
-                } catch (e) {
-                    console.error(e);
-                    sendToSocket(CLIENT2SERVER.CLIENT_FUNCTION_RESPONSE + "1" + id + ":" + e.message);
-                }
-            }
-            if (m[0] === SERVER2CLIENT.SERVER_FUNCTION_RESPONSE) {
-                const spl = m.substring(1).split(":");
-                const evalId = spl[0];
-                const res = spl.slice(1).join(":");
-                evalResponses[evalId](res === "undefined" ? undefined : JSON.parse(res));
-            }
-            if (m[0] === SERVER2CLIENT.SURE_HANDSHAKE) onHandshookSure();
+            const m = E.data.toString();
+            const fn = messageHandler[m[0]];
+            if (!fn) return;
+            fn(m.substring(1));
             break;
     }
 });
@@ -141,25 +171,16 @@ const pathJoin = (f, cd = mainFile.split("/").slice(0, -1)) => {
 };
 const fileHandlers = {
     build: {
-        html: (name, content) => {
-            exports[name] = {default: new DOMParser().parseFromString(content, "text/html")};
-            hasExported.push(name);
-            return exports[name];
-        },
+        html: (name, content) => ({default: new DOMParser().parseFromString(content, "text/html")}),
         css: (name, content) => {
             const style = document.createElement("style");
             style.innerHTML = content;
             document.head.appendChild(style);
-            exports[name] = {default: style};
-            hasExported.push(name);
-            return exports[name];
+            return {default: style};
         },
-        js: async (name, content) => {
-            exports[name] = {default: await runModuleCode(content)};
-            hasExported.push(name);
-            return exports[name];
-        }
+        js: async (name, content) => ({default: await runModuleCode(content)})
     },
+    assets: {},
     external: {
         html: (name, content) => ({default: new DOMParser().parseFromString(content, "text/html")}),
         css: (name, content) => {
@@ -172,6 +193,7 @@ const fileHandlers = {
         json: (name, content) => ({default: JSON.parse(content)})
     }
 };
+Hizzy.sendNavigationMessage = true;
 Hizzy.resolvePath = p => {
     p = pathJoin(p);
     for (const folder in STATIC) {
@@ -201,15 +223,17 @@ const import_ = async (f, _from, extra = []) => {
     }
     if (isURL) return urlExport(f);
     const relativeP = f.startsWith(".");
-    const path = pathJoin(f);
+    const path = pathJoin(f.split("?")[0].split("#")[0]);
     const file = files[path] || files[path + ".jsx"] || files[path + ".tsx"];
     const fName = files[path] ? path : (files[path + ".jsx"] ? path + ".jsx" : path + ".tsx");
     const _fExtSpl = fName.split(".");
     const fExt = _fExtSpl.length <= 1 ? "" : _fExtSpl[_fExtSpl.length - 1];
+    const _fExtSplAct = path.split(".");
+    const fExtAct = _fExtSplAct.length <= 1 ? "" : _fExtSplAct[_fExtSplAct.length - 1];
     if (hasExported.includes(fName)) return exports[fName];
     if (fExt !== "jsx" && fExt !== "tsx" && file) {
         if (isRaw) return {default: file, content: file};
-        const fH = fileHandlers.build[fExt];
+        const fH = fileHandlers.build[fExtAct];
         if (fH) {
             hasExported.push(fName);
             return exports[fName] = await fH(fName, file);
@@ -218,7 +242,7 @@ const import_ = async (f, _from, extra = []) => {
     }
     if (typeof file === "undefined") {
         if (f.startsWith("https://") || f.startsWith("http://")) {
-            const fH = fileHandlers.external[fExt];
+            const fH = fileHandlers.external[fExtAct];
             const content = fetchCache[f] = fetchCache[f] ?? (await (await fetch(f)).text());
             if (fH) {
                 hasExported.push(fName);
@@ -232,12 +256,23 @@ const import_ = async (f, _from, extra = []) => {
             d.cookie = "__hizzy__=" + key;
             if (!relativeP && !npmF) throw new Error("Module not found: " + path);
             let a;
+            let res;
+            let content;
             try {
-                if (isRaw) {
-                    const content = await (await fetch(url)).text();
-                    a = {default: content, content};
-                } else {
-                    a = await import(url);
+                res = await fetch(url, {headers: {"sec-fetch-dest": "script"}});
+                content = fetchCache[f] = fetchCache[f] ?? await res.text();
+                if (res.type !== "application/javascript") {
+                    const fH = fileHandlers.assets[fExtAct];
+                    if (fH) {
+                        hasExported.push(fName);
+                        return exports[fName] = isRaw ? {default: content, content} : await fH(fName, content);
+                    }
+                    if (isRaw) return {default: content, content};
+                    return urlExport(f);
+                }
+                if (isRaw) a = {default: content, content};
+                else {
+                    a = await runModuleCode(content);
                     if (!relativeP) a = a.default;
                 }
             } catch (e) {
@@ -311,9 +346,20 @@ window.setInterval = (f, t) => {
 let pageCache = {
     [location.pathname]: {mainFile, files}
 };
+const completePage = async (p, push) => {
+    const actual = p.split("?")[0].split("#")[0];
+    pageCache[actual] = {mainFile, files};
+    if (push) {
+        history.pushState({
+            ["__hizzy" + R + "__"]: p
+        }, null, "/" + p);
+        if (Hizzy.sendNavigationMessage) console.log("%cNavigated to " + location.href, "color: #4c88ff");
+    }
+    await loadPage(mainFile);
+};
 const fetchPage = async (p, push = true) => {
     p = pathJoin(p, location.pathname.split("/").slice(1, -1));
-    const actual = p.split("#")[0].split("?")[0];
+    const actual = p.split("?")[0].split("#")[0];
     d.cookie = "__hizzy__=" + key;
     try {
         if (pageCache[actual]) {
@@ -327,41 +373,22 @@ const fetchPage = async (p, push = true) => {
                 }
             });
         } else {
-            const spl = (await (await fetch("/" + p + "", {
+            const pUuid = crypto.randomUUID();
+            const wait = expectPayload(pUuid, p, push);
+            await fetch("/" + p, {
                 headers: {
-                    "hizzy-dest": "script"
+                    "hizzy-dest": "script",
+                    "hizzy-payload-id": pUuid
                 }
-            })).text()).split("\u0000");
-            if (spl.length === 1) {
-                try {
-                    const j = JSON.parse(spl[0]);
-                    console.error(j.error || j);
-                } catch (e) {
-                    console.error("Couldn't parse invalid JSON.");
-                    console.error(e);
-                }
-                return;
-            }
-            mainFile = JSON.parse(spl[0]);
-            files = JSON.parse(spl.slice(1).join("\u0000"));
+            }); // todo: send a packet instead? but it should also trigger GET route, if client wants to protect that url
+            await wait;
         }
     } catch (e) {
         throw e;
     } finally {
         d.cookie = "__hizzy__=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
     }
-    exports = {};
-    hasExported = [];
-    fetchCache = {};
-    for (const f in files) exports[f] = {};
-    pageCache[actual] = {mainFile, files};
-    if (push) {
-        history.pushState({
-            ["__hizzy" + R + "__"]: p
-        }, null, "/" + p);
-        console.log("%cNavigated to " + location.href, "color: #4c88ff");
-    }
-    await loadPage(mainFile);
+    await completePage(p, push);
 };
 const reloadPage = () => fetchPage(location.pathname);
 Hizzy.fetch = async (url, options = {}) => await (await fetch(url, options))[options.json ? "json" : "text"]();
@@ -390,6 +417,12 @@ const loadPage = async file => {
     d.documentElement.innerHTML = baseHTML;
     for (const t of timeouts) clearTimeout(t);
     timeouts = [];
+
+    exports = {};
+    hasExported = [];
+    fetchCache = {};
+    for (const f in files) exports[f] = {};
+
     try {
         const exp = await import_(file.split("/").slice(-1)[0], null);
         if (exp && exp.default) {
@@ -418,4 +451,5 @@ const loadPage = async file => {
     onRender();
 };
 // LOADING THE ACTUAL PAGE:
-await fetchPage(location.pathname, false);
+// await fetchPage(location.pathname, false);
+await completePage("", false);

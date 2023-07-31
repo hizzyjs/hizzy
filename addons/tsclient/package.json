@@ -1,0 +1,11 @@
+{
+  "name": "@hizzyjs/tsclient",
+  "description": "Hizzy's official TS(Client) support",
+  "version": "1.0.1",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hizzyjs/hizzy/tree/main/addons/tsclient"
+  },
+  "license": "MIT"
+}

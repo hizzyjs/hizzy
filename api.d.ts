@@ -149,6 +149,7 @@ declare class APIClass {
         replaceText: (position: { start: number, end: number }, text: string) => void
     }) => any)[]>;
     preFileHandlers: Record<string, (file: string, content: string, setFile: (file: string) => void, setContent: (content: string) => void, cancel: () => void) => any>;
+    filePacketHandlers: Record<string, (file: string, content: Buffer) => string>;
 
     constructor(dir: string);
 
@@ -214,6 +215,8 @@ declare class APIClass {
 
     jsxToJS(code: string | Buffer, extension: string): string;
 
+    tsToJS(code: string | Buffer): string;
+
     processMain(code: string | Buffer): Promise<void>;
 
     processDevMain(): Promise<void>;
@@ -233,6 +236,12 @@ declare class APIClass {
         argv: Record<string, string>,
         isDev: boolean
     }) => HizzyConfiguration): HizzyConfiguration;
+
+    minify: {
+        js: (code: string) => string,
+        css: (code: string) => string,
+        html: (code: string) => string
+    };
 }
 
 declare global {

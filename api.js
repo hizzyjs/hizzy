@@ -110,11 +110,13 @@ const {CLIENT2SERVER, SERVER2CLIENT} = {
         CLIENT_FUNCTION_REQUEST: "2", // requested to run a client-sided function
         SERVER_FUNCTION_RESPONSE: "3", // the response got from running a function with the @server decorator
         SURE_HANDSHAKE: "4", // server agreed on shaking the hand as well, what a friendship!
+        PAGE_PAYLOAD: "5",
         "0": "FILE_REFRESH",
         "1": "HANDSHAKE_REQUESTED",
         "2": "CLIENT_FUNCTION_REQUEST",
         "3": "SERVER_FUNCTION_RESPONSE",
-        "4": "SURE_HANDSHAKE"
+        "4": "SURE_HANDSHAKE",
+        "5": "PAGE_PAYLOAD"
     }
 };
 const fx = (a, b) => {
@@ -384,6 +386,7 @@ class API extends EventEmitter {
     #firstScan = true;
     #addonCache = null;
     #globalStates = new Map;
+    #startPacket = {};
     server;
     socketServer;
     autoRefresh = false;
@@ -395,6 +398,7 @@ class API extends EventEmitter {
     scanHandlers = {};
     functionDecorators = {};
     preFileHandlers = {};
+    filePacketHandlers = {};
 
     constructor(dir) {
         if (API.API) return API.API;
@@ -416,7 +420,7 @@ class API extends EventEmitter {
             const socket = this.#clients[uuid];
             printer.dev.debug("request: " + req.url + ", method: " + req.method + ", ip: " + (req.ip.startsWith("::ffff:") ? req.ip.substring(7) : req.ip));
             if (!this.dev && (this.#isBuilding || this.#isScanningBuild)) return res.send("Building, please be patient.<script>setTimeout(()=>location.reload(),1000)</script>");
-            let l = req.url.split("?")[0];
+            let l = req.url.split("?")[0].split("#")[0];
             if (l[0] !== "/") return;
             l = l.substring(1);
             req.__socket = socket;
@@ -678,7 +682,6 @@ class API extends EventEmitter {
                 const clientFunctions = jsx.clientFunctionList;
                 const fJ = JSON.stringify(f);
                 beginCode[f] = makeBeginCode(uuid, clientFunctions, fJ);
-                // todo: async functions for decorated functions // todo: check if html still works
             });
             prepareCodes();
             const onPageLoad = async () => {
@@ -692,13 +695,18 @@ class API extends EventEmitter {
                     close("internal server error");
                 }
             };
-            socket._externalLoad = (url, cPages) => {
+            const sendPagePayload = pk => {
+                if (socket._closed) return;
+                socket.send(SERVER2CLIENT.PAGE_PAYLOAD + "" + pk);
+            };
+            socket._externalLoad = (url, cPages, pk, isCached) => {
                 if (!cPages) return;
                 socket._clientPages = cPages[0];
                 socket._mainFile = cPages[1];
                 socket._URL_ = url;
                 prepareCodes();
                 onPageLoad().then(r => r);
+                if (!isCached) sendPagePayload(pk);
             };
             ka();
             socket.on("message", async data => {
@@ -711,8 +719,10 @@ class API extends EventEmitter {
                     if (data[0] === CLIENT2SERVER.HANDSHAKE_RESPONSE) { // handshake finished
                         if (socket._handshook) return close("one handshake is enough");
                         socket._handshook = true;
-                        // onPageLoad();
                         socket._send(SERVER2CLIENT.SURE_HANDSHAKE);
+                        const pk = this.#startPacket[socket._uuid];
+                        delete this.#startPacket[socket._uuid];
+                        if (pk) sendPagePayload(pk);
                         return;
                     }
                     if (!socket._handshook) return close("haven't handshook"); // todo: try to use jsx packets in html process and see if it can be exploited
@@ -816,8 +826,11 @@ class API extends EventEmitter {
         const sr = json.serverFunctions;
         const k = Object.keys(sr);
         const nmPath = path.join(this.#dir, "node_modules");
-        const pkgL = fs.existsSync(nmPath) ? fs.readdirSync(nmPath) : [];
-        for (const pkgN of pkgL) this.#getPackageImport(pkgN);
+        let pkgL = json.importList;
+        if (config.allowAllPackages && fs.existsSync(nmPath)) {
+            pkgL = fs.readdirSync(nmPath);
+            for (const pkgN of pkgL) this.#getPackageImport(pkgN);
+        }
         files[file] = {
             code,
             json,
@@ -828,7 +841,7 @@ class API extends EventEmitter {
                 client: json.clientFunctionList,
                 clientLoad: json.clientLoadList,
                 clientNavigate: json.clientNavigateList,
-                importList: (config.allowAllPackages ? pkgL : json.importList).map(i => [i, (this.#importMap[i] || {}).version || ""])
+                importList: pkgL.map(i => [i, (this.#importMap[i] || {}).version || ""])
             }
         };
         pk[file] = files[file].pk;
@@ -864,9 +877,13 @@ class API extends EventEmitter {
             if (f.endsWith(".jsx") || f.endsWith(".tsx")) await this.#builtJSX(f, c, req, res, files, pk);
             else {
                 if (c instanceof Buffer) {
-                    const spl = f.split(".");
-                    if (["js", "html", "css"].includes(spl[spl.length - 1])) c = c.toString();
-                    else c = [...c];
+                    const ext = path.extname(f).substring(1);
+                    if (["js", "html", "css"].includes(ext)) c = c.toString();
+                    else {
+                        const fH = this.filePacketHandlers[ext];
+                        if (fH) c = await fH(f, c);
+                        else c = [...c];
+                    }
                 }
                 files[f] = c;
                 pk[f] = c;
@@ -880,18 +897,24 @@ class API extends EventEmitter {
         this.prepLoad(req, res);
         const r = this.random();
         if (!this.#realtime) return res.json({error: "Expected 'realtime' option in the Hizzy configuration file to be true."});
-        if (fromScript) {
+        if (fromScript && req.__socket) {
+            if (
+                typeof req.headers["hizzy-payload-id"] !== "string" ||
+                req.headers["hizzy-payload-id"].includes("\x00") // no xss allowed 👀
+            ) return;
             const cPages = await this.#getPagePacket(file, code, req, res);
             if (res.headersSent) return;
-            req.__socket._externalLoad(file, this.#clientPages[req._uuid]);
-            if (req.headers["hizzy-cache"] === "yes") return res.send("ok");
-            return res.send(req._RouteJSON + "\u0000" + cPages);
+            req.__socket._externalLoad(
+                file, this.#clientPages[req._uuid],
+                req._RouteJSON + "\x00" + req.headers["hizzy-payload-id"] + "\x00" + cPages,
+                req.headers["hizzy-cache"] === "yes"
+            );
         }
         this.#hashes[req._uuid] = r;
-        await this.#getPagePacket(file, code, req, res);
-        const confJ = `['${r}','${this.#buildRuntimeId || runtimeId}',${this.#builtAt},` +
-            `${config.keepaliveTimeout > 0 ? config.clientKeepalive : -1}` +
-            `,${this.dev ? 1 : 0},` +
+        const cPages = await this.#getPagePacket(file, code, req, res);
+        this.#startPacket[req._uuid] = req._RouteJSON + "\x00\x00" + cPages;
+        const confJ = `['${r}','${this.#buildRuntimeId || runtimeId}',` +
+            `${config.keepaliveTimeout > 0 ? config.clientKeepalive : -1},${this.dev ? 1 : 0},` +
             `'${experimentalId}',${staticJSON}]`;
         let base;
         if (this.dev) {
@@ -905,7 +928,7 @@ class API extends EventEmitter {
 
     async #getPagePacket(file, code, req, res) {
         let files = {}, pk = {}, pkJ;
-        const l = req.url.split("?")[0];
+        const l = req.url.split("?")[0].split("#")[0];
         if (this.#builtJSXPage[l]) {
             [files, pkJ] = this.#builtJSXPage[l];
         } else {
@@ -976,7 +999,7 @@ class API extends EventEmitter {
 
     #staticRender(req, res) {
         if (Object.keys(config.static).length === 0) return this.notFound(req, res);
-        const l = req.url.substring(1).split("?")[0];
+        const l = req.url.substring(1).split("?")[0].split("#")[0];
         for (const folder in config.static) {
             const show = config.static[folder];
             const st = show ? path.join(show).replaceAll("\\", "/") + "/" : "";
@@ -1077,6 +1100,7 @@ class API extends EventEmitter {
                     if (i) return min.code;
                     return "";
                 });
+                else m = m.map((i, j) => j === 0 ? i : (i || "") + "")
                 addonPks.push(m);
             }
             this.#addonCache = JSON.stringify(addonPks);
@@ -1485,7 +1509,7 @@ class API extends EventEmitter {
                     return exit("Cannot add multiple routes to the same endpoint: " + p);
                 const r = path.join(s.props.route || "");
 
-                let allow = u.allow === "*" ? "*" : s.props.allow;
+                let allow = u.allow === "*" ? "*" : s.props.allow; // todo: add allow="auto"
                 if (allow === undefined) allow = "*";
                 if (allow === "*") u.allow = "*";
                 if (Array.isArray(allow)) u.allow = [...new Set([...u.allow, ...allow])];
@@ -1764,7 +1788,9 @@ class API extends EventEmitter {
         if (name.includes(".") || ["hizzy", "@hizzyjs/types", "react", "preact"].includes(name)) return null;
         const p = path.join(this.#dir, "node_modules", name);
         if (!fs.existsSync(p) || !fs.statSync(p).isDirectory()) return null;
-        const pkg = require(path.join(p, "package.json"));
+        const pkgP = path.join(p, "package.json");
+        if (!fs.existsSync(pkgP) || !fs.statSync(pkgP).isFile()) return null;
+        const pkg = require(pkgP);
         const self = this.#importMap[name] = {
             code: esbuild.buildSync({
                 stdin: {
@@ -1864,6 +1890,17 @@ class API extends EventEmitter {
         }
     };
 
+    tsToJS(jsx) {
+        try {
+            return babel.transformSync(jsx, {
+                filename: "file.ts",
+                presets: [require("@babel/preset-typescript")]
+            }).code;
+        } catch (e) {
+            return e;
+        }
+    };
+
     getCookie(cookies, cookie) {
         const c = (cookies || "").split(";").map(i => i.trim()).find(i => i.startsWith(cookie + "="));
         return c ? c.substring(cookie.length + 1) : null;
@@ -1888,6 +1925,8 @@ class API extends EventEmitter {
     getPkg(name) {
         return (this.#getPackageImport(name) || {}).actual;
     };
+
+    minify = minify;
 }
 
 module.exports = API;

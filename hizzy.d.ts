@@ -55,6 +55,8 @@ export function fetch(url: RequestInfo | URL, init?: RequestInit & {
 
 export {Conf as UserConfig};
 
+export let sendNavigationMessage: boolean;
+
 export {
     useCallback,
     useContext,
