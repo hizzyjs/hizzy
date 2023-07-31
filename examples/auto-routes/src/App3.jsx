@@ -1,0 +1,1 @@
+export default "im from the App3.jsx file!"; // this will never be sent to the client since it's not referenced anywhere!
