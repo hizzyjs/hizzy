@@ -328,9 +328,9 @@ if (isTerminal && args[0]) {
             require(dir + "/node_modules/@hizzyjs/types");
             const {version: got} = require(dir + "/node_modules/@hizzyjs/types/package.json");
             const current = require("./package.json").version;
-            if (got !== current) printer.dev.warn(`The installed %c@hizzyjs/types@${got}&t's version don't match the version of%c hizzy@${current}&t, please consider updating. %cYou can disable this by setting 'warnAboutTypes' to false in config file.`, "color: orange", "color: orange", "color: gray");
+            if (got !== current) printer.dev.warn(`The installed %c@hizzyjs/types@${got}&t's version don't match the version of%c hizzy@${current}&t, please consider updating. %cYou can disable this by setting 'warnAboutTypes' to false in the config file.`, "color: orange", "color: orange", "color: gray");
         } catch (e) {
-            // printer.dev.warn("Please consider installing %c@hizzyjs/types&t to allow your IDE's intellisense to work properly. %cYou can disable this by setting 'warnAboutTypes' to false in config file.", "color: orange", "color: gray");
+            // printer.dev.warn("Please consider installing %c@hizzyjs/types&t to allow your IDE's intellisense to work properly. %cYou can disable this by setting 'warnAboutTypes' to false in the config file.", "color: orange", "color: gray");
         }
     }
     if (!_argv_.debug) {
@@ -345,7 +345,7 @@ if (isTerminal && args[0]) {
             if (srcExists) fs.rmSync(srcPath);
             printer.dev.debug("Creating the %c/" + conf.srcFolder + "&t folder...", "color: orange");
             fs.mkdirSync(srcPath);
-            fs.writeFileSync(path.join(srcPath, "App.jsx"), `const foo = 20;\nexport default <div>Hello, world! { foo * 2 }</div>`);
+            fs.writeFileSync(path.join(srcPath, "App." + (_argv_["ts"] ? "t" : "j") + "sx"), `const foo = 20;\nexport default <div>Hello, world! { foo * 2 }</div>`);
         } else printer.dev.debug("Skipping the creation of %c/" + conf.srcFolder + "&t because there is an existing build.", "color: orange");
     }
     self.config = conf;
@@ -361,14 +361,21 @@ if (isTerminal && args[0]) {
             conf.main = conf.main.substring(0, conf.main.length - 3) + "tsx";
         } else {
             printer.dev.debug("Creating the %c/src/" + conf.main + "&t file...", "color: orange");
-            fs.writeFileSync(mainPath, {
-                ".jsx": `export default <Routes>
-    <Route path="/" route="./App.jsx"/>
-</Routes>;`
-            }[mainExtension]);
+            fs.writeFileSync(mainPath, `export default <Routes>
+    <Route path="/" route="./App.${_argv_["ts"] ? "t" : "j"}sx"/>
+</Routes>;`);
         }
     }
     Object.freeze(conf);
+    if (_argv_["ts"] && conf.warnAboutTypes) {
+        const not = ["react", "hizzy"]
+            .filter(i => !fs.existsSync(path.join(dir, "node_modules", i)))
+            .map(i => `'%c${i}&t'`);
+        if (not.length) {
+            printer.dev.warn(`Please consider installing the package${not.length > 1 ? "s" : ""} ${not.join(" and ")} for a better coding experience. %cYou can disable this by setting 'warnAboutTypes' to false in the config file.`, ...not.map(() => "color: orange"), "color: gray");
+            printer.println("");
+        }
+    }
     if (_argv_.build) {
         _argv_["just-build"] = true;
         Hizzy.build().then(() => process.exit());
