@@ -476,8 +476,8 @@ class API extends EventEmitter {
             printer.dev.warn("No %c/" + config.srcFolder + "&t found. Forcing to disable the developer mode.", "color: orange");
             this.dev = false;
         }
-        this.buildHandlers.jsx = [async (file, get, set, zip, ext, pt) => {
-            const norm = await this.readClientJSX(file, get.toString());
+        this.buildHandlers.jsx = this.buildHandlers.tsx = [async (file, get, set, zip, ext, pt) => {
+            const norm = await this.readClientJSX([...pt, file].join("/"), get.toString());
             set(norm.code);
             delete norm.code;
             zip.file("jsx/" + pt.map(i => i + "/").join("") + file.substring(0, file.length - 4) + ".json", JSON.stringify(norm));
@@ -866,27 +866,30 @@ class API extends EventEmitter {
                 };
                 d("");
             } else ls = Object.keys(this.#buildCache).filter(i => !deny.includes(i));
-        } else if (ls === "auto") ls = json.fileImportList;
+        } else if (ls === "auto") ls = json.fileImportList.map(i => path.join(path.dirname(file), i));
+        const ch = async s => {
+            if (this.dev) {
+                const pt = path.join(this.#dir, config.srcFolder, s);
+                if (!fs.existsSync(pt) || !fs.statSync(pt).isFile()) return;
+                return this.cacheDevFile(pt);
+            } else return await this.cacheBuildFile(s);
+        };
         for (let f of ls) {
             let c;
-            const ch = async s => {
-                if (this.dev) {
-                    const pt = path.join(this.#dir, config.srcFolder, s);
-                    if (!fs.existsSync(pt) || !fs.statSync(pt).isFile()) return;
-                    return this.cacheDevFile(pt);
-                } else return await this.cacheBuildFile(s);
-            };
             const pR = path.join(f).replaceAll("\\", "/");
             let p = pR;
-            for (const a of ["tsx", "jsx", "ts", "js"]) {
+            if (!path.extname(pR)) for (const a of ["tsx", "jsx", "ts", "js"]) {
                 c = await ch(p);
                 if (c === undefined) p = pR + "." + a;
                 else {
                     f = p;
                     break;
                 }
+            } else {
+                f = p;
+                c = await ch(p);
             }
-            if (files[f] || c === undefined) continue;
+            if (deny.includes(f) || files[f] || c === undefined) continue;
             if (!c) c = "";
             this.watchFile(f);
             if (f.endsWith(".jsx") || f.endsWith(".tsx")) await this.#builtJSX(f, c, req, res, files, pk);
@@ -924,6 +927,7 @@ class API extends EventEmitter {
                 req.headers["hizzy-cache"] === "yes"
             );
         }
+        if (req.__socket) return res.send("<script>location.reload()</script>"); // in case somehow client sees this.
         this.#hashes[req._uuid] = r;
         const cPages = await this.#getPagePacket(file, code, req, res);
         this.#startPacket[req._uuid] = req._RouteJSON + "\x00\x00" + cPages;
@@ -1043,6 +1047,7 @@ class API extends EventEmitter {
     };
 
     async #buildRender(l, req, res) {
+        l = l.replaceAll("\\", "/");
         const f = await this.cacheBuildFile(l);
         if (!f) return this.#invalidFile(res, l);
         await this.sendFile(l, f, req, res);
