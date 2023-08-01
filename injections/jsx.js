@@ -376,7 +376,8 @@ const fetchPage = async (p, push = true) => {
             await fetch("/" + p, {
                 headers: {
                     "hizzy-dest": "script",
-                    "hizzy-cache": "yes"
+                    "hizzy-cache": "yes",
+                    "hizzy-payload-id": ""
                 }
             });
             rst();
