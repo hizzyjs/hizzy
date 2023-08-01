@@ -179,12 +179,30 @@ else {
 const interfaces = os.networkInterfaces();
 const addresses = [];
 for (const interfaceName in interfaces) {
-    const iface = interfaces[interfaceName];
-    for (const alias of iface) if (alias.family === "IPv4" && !alias.internal) addresses.push(alias.address);
+    const iFace = interfaces[interfaceName];
+    for (const alias of iFace) if (alias.family === "IPv4" && !alias.internal) addresses.push(alias.address);
 }
 const ideaCmd = {win32: "idea64.exe", darwin: "idea"}[os.platform()] || "idea.sh";
 const phpStormCmd = {win32: "phpstorm64.exe", darwin: "phpstorm"}[os.platform()] || "phpstorm.sh";
 const webStormCmd = {win32: "webstorm.exe", darwin: "webstorm"}[os.platform()] || "webstorm.sh";
+
+const codeAtCache = {};
+const runCodeAt = async (code, at) => {
+    const k = at + "\x00" + code;
+    if (codeAtCache[k]) return codeAtCache[k];
+    const uuid = crypto.randomUUID();
+    const pt = path.join(at, uuid + ".mjs");
+    fs.writeFileSync(pt, code);
+    let res;
+    try {
+        res = {success: true, result: await import(url.pathToFileURL(pt))};
+    } catch (e) {
+        res = {success: false, result: e};
+    }
+    fs.rmSync(pt);
+    return codeAtCache[k] = res;
+};
+const runCodeAtSpecial = async (code, args, at) => await runCodeAt(`export default async (${args.join(",")}) => {${code}}`, at);
 
 class Client {
     static clients = {};
@@ -645,8 +663,15 @@ class API extends EventEmitter {
                     const jsx = socket._clientPages[socket._mainFile].json;
                     const leaveEvents = jsx.leaveEvent;
                     (async () => { // it could break some functionality of _close() function, so I moved async to here
+                        const pt = path.join(this.#dir, config.srcFolder, socket._mainFile, "..");
+                        const f = await runCodeAtSpecial(
+                            `${jsx.serverImportCode};${beginCode[socket._mainFile]};${leaveEvents.map(i => i.code).join(";")};${leaveEvents.map(i => `try{${i.name}()}catch(e){printer.raw.error(e)}`).join(";")}`,
+                            ["currentUUID", "currentClient"],
+                            pt
+                        );
+                        if (!f.success) return printer.dev.error(f.result);
                         try {
-                            await Function("currentUUID", "currentClient", `return (async()=>{${jsx.serverImportCode};${beginCode[socket._mainFile]};${leaveEvents.map(i => i.code).join(";")};${leaveEvents.map(i => `${i.name}()`).join(";")}})()`)(uuid, client);
+                            await f.result.default(uuid, client);
                         } catch (e) {
                             printer.dev.error(e);
                         }
@@ -688,11 +713,21 @@ class API extends EventEmitter {
                 if (!socket._mainFile) return;
                 const jsx = socket._clientPages[socket._mainFile].json;
                 const joinEvents = jsx.joinEvent;
-                try {
-                    await Function("currentUUID", "currentClient", `return (async()=>{${jsx.serverImportCode};${beginCode[socket._mainFile]};${joinEvents.map(i => i.code).join(";")};${joinEvents.map(i => `${i.name}()`).join(";")}})()`)(uuid, client);
-                } catch (e) {
-                    printer.dev.error(e);
+                const pt = path.join(this.#dir, config.srcFolder, socket._mainFile, "..");
+                const f = await runCodeAtSpecial(
+                    `${jsx.serverImportCode};${beginCode[socket._mainFile]};${joinEvents.map(i => i.code).join(";")};${joinEvents.map(i => `${i.name}()`).join(";")}`,
+                    ["currentUUID", "currentClient"],
+                    pt
+                );
+                if (!f.success) {
                     close("internal server error");
+                    return printer.dev.error(f.result);
+                }
+                try {
+                    await f.result.default(uuid, client);
+                } catch (e) {
+                    close("internal server error");
+                    return printer.dev.error(e);
                 }
             };
             const sendPagePayload = pk => {
@@ -749,11 +784,21 @@ class API extends EventEmitter {
                         let res;
                         let err;
                         try {
-                            res = await Function("currentUUID", "currentClient", "...args", `return new Promise(async r=>{${jsx.serverImportCode};${beginCode[page]};${fn.code};r(await ${fn.name}(...args))})`)(uuid, client, ...args);
+                            const pt = path.join(this.#dir, config.srcFolder, socket._mainFile, "..");
+                            const f = await runCodeAtSpecial(
+                                `${jsx.serverImportCode};${beginCode[page]};${fn.code};return await ${fn.name}(...args${runtimeId})`,
+                                ["currentUUID", "currentClient", "...args" + runtimeId],
+                                pt
+                            );
+                            if (f.success) res = await f.result.default(uuid, client, ...args);
+                            else err = f.result;
                         } catch (e) {
                             err = e;
                         }
-                        if (err) return close("internal server error");
+                        if (err) {
+                            printer.dev.error(err);
+                            return close("internal server error");
+                        }
                         if (fn.r) {
                             let r;
                             try {
@@ -985,7 +1030,6 @@ class API extends EventEmitter {
         fs.watchFile(path.join(this.#dir, config.srcFolder, file), {interval: 1}, () => {
             for (const uuid in this.#clients) {
                 const client = this.#clients[uuid];
-                // if (client._URL_ !== file) return; // todo: re-enable this with connection checks
                 client._send(SERVER2CLIENT.FILE_REFRESH);
             }
         });
@@ -1456,7 +1500,13 @@ class API extends EventEmitter {
         }
         this.#jsxFunctions[file] = json;
         const clientFunctions = json.clientFunctionList;
-        inits.push(...json.serverInit.map(i => Function(`return (async()=>{${json.serverImportCode};${makeBeginCode(null, clientFunctions, JSON.stringify(path.join(file)))}${i.code};${i.name}();})()`)));
+        inits.push(...await Promise.all(json.serverInit.map(async i => {
+            const pt = path.join(this.#dir, config.srcFolder, file, "..");
+            return (await runCodeAtSpecial(
+                `${json.serverImportCode};${makeBeginCode(null, clientFunctions, JSON.stringify(path.join(file)))}${i.code};${i.name}()`,
+                [], pt
+            )).result.default || (r => r);
+        })));
         if (!this.#buildCache) this.#buildCache = {};
         this.#buildCache[file] = data;
         return json;
@@ -1595,7 +1645,8 @@ class API extends EventEmitter {
     // todo: maybe add an ability to set the connection timeout time for requests, like if it's far away increase it etc.
     async readClientJSX(file, jsxCode) {
         if (file === config.main) return {
-            code: `throw "Cannot access the main file.";`,
+            // throw "Cannot access the main file from the client side.";
+            code: "",
             serverFunctions: {},
             clientFunctionList: [],
             clientLoadList: [],
@@ -1604,6 +1655,7 @@ class API extends EventEmitter {
             joinEvent: [],
             leaveEvent: [],
             importList: [],
+            fileImportList: [],
             serverImportCode: ""
         };
         const jsCode = this.jsxToJS(jsxCode, path.extname(file));
