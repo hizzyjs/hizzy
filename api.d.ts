@@ -101,6 +101,12 @@ declare class Client {
 
     get uuid(): string;
 
+    get ip(): string;
+
+    get request(): Request;
+
+    get actualRequest(): Request;
+
     eval(code: string): Promise<SocketTraveler>;
 
     remove(reason?: string): void;
