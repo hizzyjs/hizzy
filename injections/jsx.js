@@ -360,7 +360,7 @@ const completePage = async (p, push) => {
         history.pushState({
             ["__hizzy" + R + "__"]: p
         }, null, "/" + p);
-        if (Hizzy.sendNavigationMessage) console.log("%cNavigated to " + location.href, "color: #4c88ff");
+        if (Hizzy.sendNavigationMessage) console.log("%c[Hizzy] %cNavigated to " + location.href, "color: orange", "color: #4c88ff");
     }
     await loadPage(mainFile);
 };
@@ -368,7 +368,7 @@ const fetchPage = async (p, push = true) => {
     p = pathJoin(p, location.pathname.split("/").slice(1, -1));
     const actual = p.split("?")[0].split("#")[0];
     try {
-        if (pageCache[actual]) {
+        if (!DEV && pageCache[actual]) {
             const page = pageCache[actual];
             mainFile = page.mainFile;
             files = page.files;
