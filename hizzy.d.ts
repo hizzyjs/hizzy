@@ -32,7 +32,8 @@ export function openPage(url: string): void;
 export function reloadPage(): void;
 
 export const LinkComponent: (props: {
-    path: string | Location
+    path: string | Location,
+    children?: string
 }) => any;
 
 export function useAddon(name: string): any;
