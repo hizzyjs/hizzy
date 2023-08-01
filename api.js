@@ -1815,8 +1815,9 @@ class API extends EventEmitter {
     };
 
     #getPackageImport(name) {
+        name = name.split("?")[0].split("#")[0];
         if (this.#importMap[name]) return this.#importMap[name];
-        if (name.includes(".") || ["hizzy", "@hizzyjs/types", "react", "preact"].includes(name)) return null;
+        if (name.includes(".") || ["hizzy", "@hizzyjs/types", "react", "preact"].includes(name) || this.getAddonByName(name)) return null;
         const p = path.join(this.#dir, "node_modules", name);
         if (!fs.existsSync(p) || !fs.statSync(p).isDirectory()) return null;
         const pkgP = path.join(p, "package.json");
@@ -1902,6 +1903,10 @@ class API extends EventEmitter {
 
     getAddon(name) {
         return Addon.addons[name] || null;
+    };
+
+    getAddonByName(name) {
+        return Object.keys(Addon.addons).find(i => Addon.addons[i].module.name === name);
     };
 
     jsxToJS(jsx, extension) {

@@ -12,7 +12,16 @@ type pkg = LanguageAddon & {
     get next(): string
 };
 export const Lang = (props?: {
-    children: string
+    children?: string,
+    value?: string,
+    v?: string,
+    args?: Record<string, string> | string[],
+    nested?: boolean
 }) => any;
+
 export function translate(key: string, nested?: boolean, args?: Record<string, string>): string;
+
 export default pkg;
+export type Config = {
+
+};

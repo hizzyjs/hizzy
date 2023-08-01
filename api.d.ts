@@ -27,6 +27,9 @@ type Shortcut = {
     run: () => void
 };
 
+type AddonConfig<T extends string> = import(T).Config;
+type AddonConf<T extends string> = Record<T, AddonConfig<T>> | T[] | [T, AddonConfig<T>][];
+
 type HizzyConfiguration = {
     dev?: boolean,
     port?: number,
@@ -46,7 +49,7 @@ type HizzyConfiguration = {
     clientKeepalive?: number,
     minClientKeepalive?: number,
     includeOriginalInBuild?: boolean,
-    addons?: Record<string, Object> | string[] | [string, Object][], // todo: maybe intellisense for addon options, located in the addons' own d.ts files as a type?
+    addons?: AddonConf,
     static?: Record<string, string> | string[],
     cache?: {
         "addons"?: number,
