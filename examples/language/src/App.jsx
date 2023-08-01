@@ -1,4 +1,4 @@
-import Lang from "@hizzyjs/language";
+import {Lang} from "@hizzyjs/language";
 
 export default <div>
     <Lang>hey</Lang><br/>

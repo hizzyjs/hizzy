@@ -16,14 +16,25 @@ module.exports = class LanguageAddon extends AddonModule {
         if (!Object.keys(container).length) return;
         this.onClientSideLoad = (() => {
             const [def, container] = $conf;
-            let lang = (document.cookie.split(";").find(i => i.trim().startsWith("__hizzy__lang__=")) || "__hizzy__lang__=" + def).trim().substring("__hizzy__lang__=".length);
+            const ck = "__hizzy__lang__=";
+            let lang = (document.cookie.split(";").find(i => i.trim().startsWith(ck)) || ck + def).trim().substring(ck.length);
             const hooks = [];
             Object.freeze(container);
+            const translate = (str, nested = true, args = {}) => {
+                let cur = container[lang];
+                if (nested) {
+
+                } else cur = cur[str];
+                cur = cur || "";
+                Object.keys(args).forEach(i => cur = cur.replaceAll("%" + i, args[i]));
+            };
 
             function Lang(props = {}) {
                 const [g, s] = Hizzy.useState("");
                 const k = typeof props.children === "string" ? props.children : "";
-                s(container[lang][k] || "");
+                const args = {...props};
+                delete args.children;
+                s(translate(k));
                 hooks.push([s, k]);
                 return Hizzy.createElement("span", null, g);
             }
@@ -34,7 +45,7 @@ module.exports = class LanguageAddon extends AddonModule {
                     set: s => {
                         if (!container[lang]) throw new Error("@hizzyjs/language: Invalid language: " + lang);
                         lang = s;
-                        hooks.forEach(([s, k]) => s(container[lang][k] || ""));
+                        hooks.forEach(([s, k]) => s(translate(k) || ""));
                     }
                 },
                 languages: {
@@ -53,11 +64,10 @@ module.exports = class LanguageAddon extends AddonModule {
                     }
                 }
             });
-            return {default: Lang};
-        }).toString()
-            .replace("$conf", JSON.stringify([
-                this.options.default || Object.keys(container)[0],
-                container
-            ]));
+            return {default: Lang, Lang, translate};
+        }).toString().replace("$conf", JSON.stringify([
+            this.options.default || Object.keys(container)[0],
+            container
+        ]));
     };
 };

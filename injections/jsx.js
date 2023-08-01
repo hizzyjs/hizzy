@@ -438,13 +438,7 @@ const loadPage = async file => {
         if (exp && exp.default) {
             let def = exp.default;
             if (typeof def === "function") def = react.h(def, null);
-            let mainDocument = d.querySelector("main");
-            if (!mainDocument) {
-                if (baseHTML) {
-                    mainDocument = d.createElement("main");
-                    d.body.appendChild(mainDocument);
-                } else mainDocument = d.body;
-            }
+            const mainDocument = d.querySelector("main") || d.body;
             if (def.__v) {
                 react.render(def, mainDocument);
                 const l = clientFunctions[file].load;
