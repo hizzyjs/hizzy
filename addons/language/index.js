@@ -15,28 +15,31 @@ module.exports = class LanguageAddon extends AddonModule {
         });
         if (!Object.keys(container).length) return;
         this.onClientSideLoad = (() => {
-            const [def, container] = $conf;
+            const [def, container, chr] = $conf;
             const ck = "__hizzy__lang__=";
-            let lang = (document.cookie.split(";").find(i => i.trim().startsWith(ck)) || ck + def).trim().substring(ck.length);
+            let lang = (d.cookie.split(";").find(i => i.trim().startsWith(ck)) || ck + def).trim().substring(ck.length);
             const hooks = [];
             Object.freeze(container);
             const translate = (str, nested = true, args = {}) => {
                 let cur = container[lang];
-                if (nested) {
-
-                } else cur = cur[str];
+                str = str.trim();
+                if (nested) for (const k of str.split(".")) cur = (cur || {})[k] || "";
+                else cur = cur[str];
                 cur = cur || "";
-                Object.keys(args).forEach(i => cur = cur.replaceAll("%" + i, args[i]));
+                if (typeof cur !== "string") return cur;
+                return cur.replaceAll(new RegExp(chr + "[a-zA-Z\\d]+", "g"), m => {
+                    m = m.substring(1);
+                    if (m in args) return args[m];
+                    return chr + m;
+                });
             };
 
             function Lang(props = {}) {
-                const [g, s] = Hizzy.useState("");
-                const k = typeof props.children === "string" ? props.children : "";
-                const args = {...props};
-                delete args.children;
-                s(translate(k));
-                hooks.push([s, k]);
-                return Hizzy.createElement("span", null, g);
+                const k = typeof props.children === "string" ? props.children : props.value || props.v || "";
+                const args = props.args || {};
+                const [g, s] = Hizzy.useState(translate(k, props.nested !== false, args));
+                hooks.push([s, k, props.nested !== false, args]);
+                return react.createElement(react.Fragment, null, g);
             }
 
             Object.defineProperties(Lang, {
@@ -45,7 +48,8 @@ module.exports = class LanguageAddon extends AddonModule {
                     set: s => {
                         if (!container[lang]) throw new Error("@hizzyjs/language: Invalid language: " + lang);
                         lang = s;
-                        hooks.forEach(([s, k]) => s(translate(k) || ""));
+                        hooks.forEach(([s, ...k]) => s(translate(...k)));
+                        d.cookie = ck + lang;
                     }
                 },
                 languages: {
@@ -67,7 +71,7 @@ module.exports = class LanguageAddon extends AddonModule {
             return {default: Lang, Lang, translate};
         }).toString().replace("$conf", JSON.stringify([
             this.options.default || Object.keys(container)[0],
-            container
+            container, this.options.character || "%"
         ]));
     };
 };
