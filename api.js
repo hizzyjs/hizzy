@@ -405,6 +405,7 @@ class API extends EventEmitter {
     #addonCache = null;
     #globalStates = new Map;
     #startPacket = {};
+    #mainDoneCb = {};
     server;
     socketServer;
     autoRefresh = false;
@@ -1558,8 +1559,14 @@ class API extends EventEmitter {
         } catch (e) {
             rmf();
             printer.dev.error(e);
-            return process.exit();
+            return;
         }
+        try {
+            if (typeof this.#mainDoneCb === "function") this.#mainDoneCb();
+        } catch (e) {
+            printer.dev.error(e);
+        }
+        if (mainResponse && mainResponse.onDone) this.#mainDoneCb = mainResponse.onDone;
         rmf();
         if (!mainResponse || !(mainResponse = mainResponse.default))
             return exit("Expected a valid 'export default' from the main file.");
