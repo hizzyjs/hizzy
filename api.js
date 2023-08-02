@@ -1543,7 +1543,7 @@ class API extends EventEmitter {
         Hizzy.Routes = global.Routes = () => React("div", null);
         Hizzy.Route = global.Route = () => React("div", null);
         let mainResponse;
-        const tPath = path.join(this.#dir, config.srcFolder, config.main) + random() + (config.mainModule ? "m" : "") + "js";
+        const tPath = path.join(this.#dir, config.srcFolder, config.main) + random() + "." + (config.mainModule ? "m" : "") + "js";
         const rmf = () => {
             if (fs.existsSync(tPath)) fs.rmSync(tPath, {recursive: true});
         };
