@@ -1,6 +1,6 @@
 {
   "name": "@hizzyjs/types",
-  "version": "0.1.6-beta",
+  "version": "0.1.7-beta",
   "description": "Instead of installing the \"hizzy\" package to all of your projects just for their types, install this!",
   "main": "index.js",
   "scripts": {},
