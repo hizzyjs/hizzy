@@ -190,16 +190,15 @@ const codeAtCache = {};
 const runCodeAt = async (code, at) => {
     const k = at + "\x00" + code;
     if (codeAtCache[k]) return codeAtCache[k];
-    const uuid = crypto.randomUUID();
-    const pt = path.join(at, uuid + ".mjs");
-    fs.writeFileSync(pt, code);
+    at += random() + ".mjs";
+    fs.writeFileSync(at, code);
     let res;
     try {
-        res = {success: true, result: await import(url.pathToFileURL(pt))};
+        res = {success: true, result: await import(url.pathToFileURL(at))};
     } catch (e) {
         res = {success: false, result: e};
     }
-    fs.rmSync(pt);
+    fs.rmSync(at);
     return codeAtCache[k] = res;
 };
 const runCodeAtSpecial = async (code, args, at) => await runCodeAt(`export default async (${args.join(",")}) => {${code}}`, at);
@@ -664,11 +663,10 @@ class API extends EventEmitter {
                     const jsx = socket._clientPages[socket._mainFile].json;
                     const leaveEvents = jsx.leaveEvent;
                     (async () => { // it could break some functionality of _close() function, so I moved async to here
-                        const pt = path.join(this.#dir, config.srcFolder, socket._mainFile, "..");
                         const f = await runCodeAtSpecial(
                             `${jsx.serverImportCode};${beginCode[socket._mainFile]};${leaveEvents.map(i => i.code).join(";")};${leaveEvents.map(i => `try{${i.name}()}catch(e){printer.raw.error(e)}`).join(";")}`,
                             ["currentUUID", "currentClient"],
-                            pt
+                            path.join(this.#dir, config.srcFolder, socket._mainFile)
                         );
                         if (!f.success) return printer.dev.error(f.result);
                         try {
@@ -714,11 +712,10 @@ class API extends EventEmitter {
                 if (!socket._mainFile) return;
                 const jsx = socket._clientPages[socket._mainFile].json;
                 const joinEvents = jsx.joinEvent;
-                const pt = path.join(this.#dir, config.srcFolder, socket._mainFile, "..");
                 const f = await runCodeAtSpecial(
                     `${jsx.serverImportCode};${beginCode[socket._mainFile]};${joinEvents.map(i => i.code).join(";")};${joinEvents.map(i => `${i.name}()`).join(";")}`,
                     ["currentUUID", "currentClient"],
-                    pt
+                    path.join(this.#dir, config.srcFolder, socket._mainFile)
                 );
                 if (!f.success) {
                     close("internal server error");
@@ -785,11 +782,10 @@ class API extends EventEmitter {
                         let res;
                         let err;
                         try {
-                            const pt = path.join(this.#dir, config.srcFolder, socket._mainFile, "..");
                             const f = await runCodeAtSpecial(
                                 `${jsx.serverImportCode};${beginCode[page]};${fn.code};return await ${fn.name}(...args${runtimeId})`,
                                 ["currentUUID", "currentClient", "...args" + runtimeId],
-                                pt
+                                path.join(this.#dir, config.srcFolder, socket._mainFile)
                             );
                             if (f.success) res = await f.result.default(uuid, client, ...args);
                             else err = f.result;
@@ -958,7 +954,7 @@ class API extends EventEmitter {
     async renderJSX(file, code, req, res, fromScript = false) {
         if (res.headersSent) return;
         this.prepLoad(req, res);
-        const r = this.random();
+        const r = random();
         if (!this.#realtime) return res.json({error: "Expected 'realtime' option in the Hizzy configuration file to be true."});
         if (fromScript && req.__socket) {
             if (
@@ -1014,7 +1010,7 @@ class API extends EventEmitter {
 
     async renderHTML(file, content, req, res) {
         this.prepLoad(req, res);
-        const r = this.random();
+        const r = random();
         this.watchFile(req._Route);
         const confJ = `['${r}',${config.keepaliveTimeout > 0 ? config.clientKeepalive : -1}]`;
         await this.sendRawFile(".html", content + (this.#realtime ?
@@ -1502,10 +1498,9 @@ class API extends EventEmitter {
         this.#jsxFunctions[file] = json;
         const clientFunctions = json.clientFunctionList;
         inits.push(...await Promise.all(json.serverInit.map(async i => {
-            const pt = path.join(this.#dir, config.srcFolder, file, "..");
             return (await runCodeAtSpecial(
                 `${json.serverImportCode};${makeBeginCode(null, clientFunctions, JSON.stringify(path.join(file)))}${i.code};${i.name}()`,
-                [], pt
+                [], path.join(this.#dir, config.srcFolder, file)
             )).result.default || (r => r);
         })));
         if (!this.#buildCache) this.#buildCache = {};
@@ -1548,8 +1543,7 @@ class API extends EventEmitter {
         Hizzy.Routes = global.Routes = () => React("div", null);
         Hizzy.Route = global.Route = () => React("div", null);
         let mainResponse;
-        const tDir = path.dirname(path.join(this.#dir, config.srcFolder, config.main));
-        const tPath = path.join(tDir, "t" + random() + "--" + path.basename(config.main) + "--." + (config.mainModule ? "m" : "") + "js");
+        const tPath = path.join(this.#dir, config.srcFolder, config.main) + random() + (config.mainModule ? "m" : "") + "js";
         const rmf = () => {
             if (fs.existsSync(tPath)) fs.rmSync(tPath, {recursive: true});
         };
