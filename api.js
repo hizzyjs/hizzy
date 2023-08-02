@@ -1562,7 +1562,7 @@ class API extends EventEmitter {
             return;
         }
         try {
-            if (typeof this.#mainDoneCb === "function") this.#mainDoneCb();
+            if (typeof this.#mainDoneCb === "function") await this.#mainDoneCb();
         } catch (e) {
             printer.dev.error(e);
         }
