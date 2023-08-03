@@ -267,8 +267,8 @@ declare global {
     let Route: RouteComponent;
 
     interface Function {
-        everyone: (...args: SocketTraveler[]) => Record<string, SocketTraveler>;
-        toClients: (clients: (Client | {uuid: string} | string)[]) => (...args: SocketTraveler[]) => Record<string, SocketTraveler>;
+        everyone: (...args: SocketTraveler[]) => Promise<Record<string, SocketTraveler>>;
+        toClients: (clients: (Client | {uuid: string} | string)[]) => (...args: SocketTraveler[]) => Promise<Record<string, SocketTraveler>>;
     }
 }/* ### TYPES ### */
 export {HizzyConfiguration};
