@@ -64,17 +64,34 @@ const pack = s => {
 };
 const EVERYONE = f => {
     if (!f["__FUNCTION__"]) throw new Error("EVERYONE function only allows client-sided functions!");
+    const cl = [];
+    const toCl = TO_CLIENTS(f)(cl);
     return async (...a) => {
-        const res = {};
-        for (const uuid of Hizzy.clientUUIDs()) {
-            res[uuid] = await Hizzy.sendEvalTo(uuid, "__hizzy_run" + Hizzy.getHash(uuid) + "__[" + f["__FUNCTION__FILE_J__"] + "].normal." + f["__FUNCTION__"] + "(" + a.map(k => pack(k)).join(",") + ")");
-        }
-        return res;
-    };
+        cl.length = 0;
+        cl.push(...Hizzy.clientUUIDs());
+        return await toCl(...a);
+    }
+};
+const TO_CLIENTS = f => {
+    if (!f["__FUNCTION__"]) throw new Error("TO_CLIENTS function only allows client-sided functions!");
+    return clients => {
+        clients = clients.map(i => typeof i === "string" ? i : i.uuid);
+        return async (...a) => {
+            const res = {};
+            for (const uuid of clients)
+                res[uuid] = await Hizzy.sendEvalTo(uuid, "__hizzy_run" + Hizzy.getHash(uuid) + "__[" + f["__FUNCTION__FILE_J__"] + "].normal." + f["__FUNCTION__"] + "(" + a.map(k => pack(k)).join(",") + ")");
+            return res;
+        };
+    }
 };
 Object.defineProperty(Function.prototype, "everyone", {
     get: function () {
         return EVERYONE(this);
+    }
+});
+Object.defineProperty(Function.prototype, "toClients", {
+    get: function () {
+        return TO_CLIENTS(this);
     }
 });
 const makeClientFunction = (file, name, uuid = null) => {
