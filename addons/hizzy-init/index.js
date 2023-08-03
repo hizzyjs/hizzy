@@ -6,8 +6,9 @@ import Zip from "jszip";
 import {exec} from "child_process";
 import url from "url";
 import {cwd, exit, stdin, stdout} from "node:process";
+import C from "chalk";
 
-const C = {
+/*const C = {
     // Modifiers
     reset: [0, 0],
     bold: [1, 22],
@@ -56,7 +57,7 @@ const C = {
     bgCyanBright: [106, 49],
     bgWhiteBright: [107, 49]
 };
-Object.keys(C).forEach(i => C[i] = r => `\x1b[${C[i][0]}m${r}\x1b[${C[i][0]}m`);
+Object.keys(C).forEach(i => C[i] = r => `\x1b[${C[i][0]}m${r}\x1b[${C[i][0]}m`);*/
 
 const makeLogger = (c = "") => str => {
     const t = c + C.reset(str);
