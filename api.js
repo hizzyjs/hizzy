@@ -2007,6 +2007,20 @@ class API extends EventEmitter {
         return {get, set, delete: delete_};
     };
 
+    useCooldown(key, ip, {amount, time}) {
+        if (!key) key = "";
+        if (typeof amount !== "number" || typeof time !== "number") {
+            throw new Error(`useCooldown() function requires an object that includes 'amount' and 'time' as numeric properties. It will check if the client has run this part of the code 'amount' times in the last 'time' milliseconds.`);
+        }
+        if (typeof ip !== "string") ip = ip.ip;
+        const {get, set} = Hizzy.useGlobalState(key + "-Cooldown-Hizzy-Internal-" + ip, [0]);
+        const f = get().filter(i => Date.now() < i);
+        if (f.length > amount) return false;
+        f.push(Date.now() + time);
+        set(f);
+        return true;
+    };
+
     defineConfig(r) {
         return r || {};
     };

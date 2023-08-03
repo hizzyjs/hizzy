@@ -238,6 +238,8 @@ declare class APIClass {
         delete: () => void
     };
 
+    useCooldown<T>(key?: any, clientOrIp: any, options: { amount: number, time: number }): boolean;
+
     watchFile(file: string): void;
 
     defineConfig(configuration: HizzyConfiguration): HizzyConfiguration;
@@ -270,3 +272,19 @@ declare global {
 }/* ### TYPES ### */
 export {HizzyConfiguration};
 export default APIClass;
+
+export type {
+    Socket,
+    SocketTraveler,
+    Addon_,
+    AddonConfig,
+    AddonModule,
+    AddonConf,
+    Client,
+    APIClass,
+    onRequestFunction,
+    Shortcut,
+    RouteComponent,
+    RoutesComponent,
+    Method
+};
