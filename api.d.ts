@@ -268,6 +268,7 @@ declare global {
 
     interface Function {
         everyone: (...args: SocketTraveler[]) => Record<string, SocketTraveler>;
+        toClients: (clients: (Client | {uuid: string} | string)[]) => (...args: SocketTraveler[]) => Record<string, SocketTraveler>;
     }
 }/* ### TYPES ### */
 export {HizzyConfiguration};
