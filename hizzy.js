@@ -369,7 +369,7 @@ if (isTerminal && args[0]) {
     }
     Object.freeze(conf);
     if (_argv_["ts"] && conf.warnAboutTypes) {
-        const not = ["react", "hizzy"]
+        const not = ["@types/react", "hizzy"]
             .filter(i => !fs.existsSync(path.join(dir, "node_modules", i)))
             .map(i => `'%c${i}&t'`);
         if (not.length) {
