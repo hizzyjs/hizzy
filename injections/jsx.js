@@ -209,7 +209,7 @@ Hizzy.resolvePath = p => {
     }
     return p;
 };
-const urlExport = f => ({default: "/" + Hizzy.resolvePath(f)});
+const urlExport = f => "/" + Hizzy.resolvePath(f);
 const customExports = {
     hizzy: () => Hizzy,
     "@hizzyjs/types": () => Hizzy,
@@ -305,7 +305,7 @@ const import_ = async (f, _from, extra = []) => {
             ["currentWebSocket", WebSocket],
             ["CFN" + R2, getting], // client function
             ["SRH" + R2, (name, fn) => serverEvaluators[name] = fn], // server evaluation handlers
-            ["FN" + R2, (s, identifiers) => {
+            ["FN" + R2, (s, args, identifiers) => {
                 /*if (identifiers) {
                     identifiers = identifiers.map(i => {
                         if (typeof i !== "function") return null;
@@ -314,11 +314,9 @@ const import_ = async (f, _from, extra = []) => {
                         return temp;
                     }); todo
                 }*/
-                return (...a) => {
-                    const id = ++_evalId;
-                    sendToSocket(CLIENT2SERVER.SERVER_FUNCTION_REQUEST + "" + id + ":" + fName + ":" + s + ":" + JSON.stringify([a, identifiers || []]));
-                    if (files[fName].respondFunctions.includes(s)) return new Promise(r => evalResponses[id] = r);
-                }
+                const id = ++_evalId;
+                sendToSocket(CLIENT2SERVER.SERVER_FUNCTION_REQUEST + "" + id + ":" + fName + ":" + s + ":" + JSON.stringify([args, identifiers || []]));
+                if (files[fName].respondFunctions.includes(s)) return new Promise(r => evalResponses[id] = r);
             }],
             ...extra
         ], true);
