@@ -16,6 +16,7 @@ const WS = require("ws");
 const open = require("open");
 const babel = require("@babel/core");
 const babelParser = require("@babel/parser");
+const babelGenerator = require("@babel/generator");
 const traverse = require("@babel/traverse").default;
 const printer = require("fancy-printer");
 const esbuild = require("esbuild");
@@ -75,11 +76,10 @@ const EVERYONE = f => {
 const TO_CLIENTS = f => {
     if (!f["__FUNCTION__"]) throw new Error("TO_CLIENTS function only allows client-sided functions!");
     return clients => {
-        clients = clients.map(i => typeof i === "string" ? i : i.uuid);
         return async (...a) => {
             const res = {};
             for (const uuid of clients)
-                res[uuid] = await Hizzy.sendEvalTo(uuid, "__hizzy_run" + Hizzy.getHash(uuid) + "__[" + f["__FUNCTION__FILE_J__"] + "].normal." + f["__FUNCTION__"] + "(" + a.map(k => pack(k)).join(",") + ")");
+                res[uuid] = (await makeClientFunction(f["__FUNCTION__FILE__"], f["__FUNCTION__"], typeof uuid === "string" ? uuid : uuid.uuid, f["__FROM__"]))(...a);
             return res;
         };
     }
@@ -94,21 +94,25 @@ Object.defineProperty(Function.prototype, "toClients", {
         return TO_CLIENTS(this);
     }
 });
-const makeClientFunction = (file, name, uuid = null) => {
+const makeClientFunction = (file, name, uuid = null, fromFunction = null) => {
     file = path.join(file);
     const fJ = JSON.stringify(file);
     const f = async (...a) => {
         if (uuid === null) throw new Error("This client-sided function wasn't assigned to any clients! Although you can still use the function with the '.everyone' property of this function!");
         const hash = Hizzy.getHash(uuid);
-        return await Hizzy.sendEvalTo(uuid, `__hizzy_run${hash}__[${fJ}].normal.${name}(${a.map(k => JSON.stringify(k)).join(",")})`);
+        return await Hizzy.sendEvalTo(uuid, fromFunction ?
+            `args=${JSON.stringify(a)};__hizzy_run${hash}__2["${fromFunction}"]("${name}(...args)")` :
+            `args=${JSON.stringify(a)};__hizzy_run${hash}__[${fJ}].normal.${name}(...args)` // old fashion way
+        );
     };
     f.__FUNCTION__ = name;
     f.__FUNCTION__FILE__ = file;
     f.__FUNCTION__FILE_J__ = fJ;
+    f.__FROM__ = fromFunction;
     // f.everyone = EVERYONE(f);
     return f;
 };
-const makeBeginCode = (uuid, clientFunctions, fJ) => clientFunctions.map(i => `const ${i} = Hizzy.makeClientFunction(${fJ}, ${JSON.stringify(i)}, ${JSON.stringify(uuid)});`).join("");
+const makeBeginCode = (uuid, clientFunctions, fJ, fromFunction = null) => clientFunctions.map(i => `const ${i} = Hizzy.makeClientFunction(${fJ}, ${JSON.stringify(i)}, ${JSON.stringify(uuid)}, "${fromFunction}");`).join("");
 
 const {CLIENT2SERVER, SERVER2CLIENT} = {
     CLIENT2SERVER: {
@@ -529,6 +533,7 @@ class API extends EventEmitter {
             const jsxJson = "jsx/" + file.substring(0, file.length - 4) + ".json";
             let jsonData;
             try {
+                if (!files[jsxJson]) throw new Error("File not found: " + jsxJson);
                 jsonData = JSON.parse(await files[jsxJson].async("string"));
                 await this.#pseudoBuildJSX(file, data, jsonData, this.#initFunctions);
             } catch (e) {
@@ -541,66 +546,47 @@ class API extends EventEmitter {
             tsx: [sourceJSXHandler],
             __default__: [(file, data) => this.#buildCache[file] = data]
         };
-
-        this.functionDecorators["@server"] = ({name, start, end, replaceText, json, code}) => {
-            const tempName = random();
-            replaceText({start, end}, `const ${name}=FN${runtimeId}("${tempName}");`);
-            json.serverFunctions[tempName] = {name, r: false, code, start, end};
-        };
-        this.functionDecorators["@server/respond"] = ({name, start, end, replaceText, json, code}) => {
-            const tempName = random();
-            replaceText({start, end}, `const ${name}=FN${runtimeId}("${tempName}");`);
-            json.serverFunctions[tempName] = {name, r: true, code, start, end};
-        };
-        this.functionDecorators["@server/start"] = ({name, start, end, replaceText, json, code}) => {
-            replaceText({start, end}, "");
-            json.serverInit.push({name, code, start, end});
-        };
-        this.functionDecorators["@server/join"] = ({name, start, end, replaceText, json, code}) => {
-            replaceText({start, end}, "");
-            json.joinEvent.push({name, code, start, end});
-        };
-        this.functionDecorators["@server/leave"] = ({name, start, end, replaceText, json, code}) => {
-            replaceText({start, end}, "");
-            json.leaveEvent.push({name, code, start, end});
-        };
-        this.functionDecorators["@client"] = r => r;
-        this.functionDecorators["@client/render"] = ({name, json}) => {
-            // replaceText({start: end, end}, `;UR${runtimeId}.${name}=${name};`);
-            json.clientLoadList.push(name);
-        };
-        this.functionDecorators["@client/navigate"] = ({name, json}) => {
-            // replaceText({start: end, end}, `;UE${runtimeId}.${name}=${name};`);
-            json.clientNavigateList.push(name);
-        }; // todo: how will the server function know which client function to pick and run 🤔 leaving it as "running the most top level"
-        // I COULD add a function like, renameVariableInContext which would rename all names for the variable in the context
-        // what i mean by context is like, the current function, but again if they reassign it... in like a function
-        // it would be hard to detect... not sure if i'm gonna add this, it would be great if someone could though!
-        /*
-
-        CONCEPT:
-
-        function C() {
-            console.log(1)
+        const srvRpl = ({name, pth, json, getIdentifiers, tempName}) => {
+            const identifiers = config.serverClientVariables ? getIdentifiers(pth) : null;
+            json.functionIdentifiers[tempName] = identifiers;
+            pth.replaceWithMultiple(babelParser.parse(`const ${name}=FN${runtimeId}("${tempName}"` +
+                (identifiers && identifiers.length ? `,${JSON.stringify(identifiers)}.map(i=>eval(\`try{\${i}}catch(e){undefined}\`))` : "")
+                + `);SRH${runtimeId}("${tempName}",r=>eval(r));`).program.body);
         }
-
-        function B() {
-            function C() { // redefined!
-                console.log(2)
-            }
-
-            // @server
-            function A() {
-                console.log(2)
-                C();
-            }
-
-            A(); // How will the server function know which one to pick 🤔
-        }
-
-        B();
-
-        */
+        this.functionDecorators["@server"] = ({name, pth, json, code, getIdentifiers}) => {
+            const tempName = random();
+            srvRpl({name, pth, json, code, getIdentifiers, tempName});
+            json.serverFunctions[tempName] = {name, r: false, code};
+            // json.serverFunctionDepths[tempName] = getDepth(pth);
+        };
+        this.functionDecorators["@server/respond"] = ({name, pth, json, code, getIdentifiers}) => {
+            const tempName = random();
+            srvRpl({name, pth, json, code, getIdentifiers, tempName});
+            json.serverFunctions[tempName] = {name, r: true, code};
+            // json.serverFunctionDepths[tempName] = getDepth(pth);
+        };
+        this.functionDecorators["@server/start"] = ({name, pth, json, code}) => {
+            pth.remove();
+            json.serverInit.push({name, code});
+        };
+        this.functionDecorators["@server/join"] = ({name, pth, json, code}) => {
+            pth.remove();
+            json.joinEvent.push({name, code});
+        };
+        this.functionDecorators["@server/leave"] = ({name, pth, json, code}) => {
+            pth.remove();
+            json.leaveEvent.push({name, code});
+        };
+        this.functionDecorators["@client"] = ({name, pth, json}) => {
+            pth.insertAfter(babelParser.parse(`CFN${runtimeId}.normal.${name}=${name};`).program.body[0]);
+            json.clientFunctionList.push(name);
+        };
+        this.functionDecorators["@client/render"] = ({name, pth}) => {
+            pth.insertAfter(babelParser.parse(`CFN${runtimeId}.load.${name}=${name};`).program.body[0]);
+        };
+        this.functionDecorators["@client/navigate"] = ({name, pth}) => {
+            pth.insertAfter(babelParser.parse(`CFN${runtimeId}.navigate.${name}=${name};`).program.body[0]);
+        };
 
         this.preFileHandlers.css = (file, content, f, c) => {
             f(".js");
@@ -681,7 +667,7 @@ class API extends EventEmitter {
                     const leaveEvents = jsx.leaveEvent;
                     (async () => { // it could break some functionality of _close() function, so I moved async to here
                         const f = await runCodeAtSpecial(
-                            `${jsx.serverImportCode};${beginCode[socket._mainFile]};${leaveEvents.map(i => i.code).join(";")};${leaveEvents.map(i => `try{${i.name}()}catch(e){printer.raw.error(e)}`).join(";")}`,
+                            `${jsx.serverImportCode};${beginCode[socket._mainFile]()};${leaveEvents.map(i => i.code).join(";")};${leaveEvents.map(i => `try{${i.name}()}catch(e){printer.raw.error(e)}`).join(";")}`,
                             ["currentUUID", "currentClient"],
                             path.join(this.#dir, config.srcFolder, socket._mainFile)
                         );
@@ -722,7 +708,7 @@ class API extends EventEmitter {
                 const jsx = socket._clientPages[f].json;
                 const clientFunctions = jsx.clientFunctionList;
                 const fJ = JSON.stringify(f);
-                beginCode[f] = makeBeginCode(uuid, clientFunctions, fJ);
+                beginCode[f] = funcId => makeBeginCode(uuid, clientFunctions, fJ, funcId);
             });
             prepareCodes();
             const onPageLoad = async () => {
@@ -730,7 +716,7 @@ class API extends EventEmitter {
                 const jsx = socket._clientPages[socket._mainFile].json;
                 const joinEvents = jsx.joinEvent;
                 const f = await runCodeAtSpecial(
-                    `${jsx.serverImportCode};${beginCode[socket._mainFile]};${joinEvents.map(i => i.code).join(";")};${joinEvents.map(i => `${i.name}()`).join(";")}`,
+                    `${jsx.serverImportCode};${beginCode[socket._mainFile]()};${joinEvents.map(i => i.code).join(";")};${joinEvents.map(i => `${i.name}()`).join(";")}`,
                     ["currentUUID", "currentClient"],
                     path.join(this.#dir, config.srcFolder, socket._mainFile)
                 );
@@ -783,7 +769,7 @@ class API extends EventEmitter {
                         const evalId = spl[0];
                         const page = spl[1];
                         const fnName = spl[2];
-                        if (typeof beginCode[page] !== "string" || typeof socket._clientPages[page] !== "object") return close("invalid jsx");
+                        if (typeof beginCode[page] !== "function" || typeof socket._clientPages[page] !== "object") return close("invalid jsx");
                         const jsx = socket._clientPages[page].json;
                         const fn = jsx.serverFunctions[fnName];
                         if (!fn) return close("invalid function");
@@ -795,16 +781,35 @@ class API extends EventEmitter {
                         } catch (e) {
                             return close("invalid json");
                         }
-                        if (typeof args !== "object" || !Array.isArray(args)) return close("invalid function args");
+                        if (
+                            typeof args !== "object" || !Array.isArray(args) ||
+                            typeof args[0] !== "object" || !Array.isArray(args[0]) ||
+                            typeof args[1] !== "object" || !Array.isArray(args[1]) ||
+                            args.length !== 2
+                        ) return close("invalid function args");
                         let res;
                         let err;
+                        let identifierPk = {};
+                        const fnIds = jsx.functionIdentifiers[fnName];
+                        if (config.serverClientVariables && fnIds && fnIds.length) {
+                            if (fnIds.length !== args[1].length) return close("an attempt of an exploit");
+                            fnIds
+                                .map((i, j) => [i, args[1][j]])
+                                .filter(i => !global[i[0]])
+                                .forEach(i => {
+                                    if (!i[1]) return;
+                                    identifierPk[i[0]] = i[1];
+                                });
+                        }
+                        const k = Object.keys(identifierPk);
+                        const definer = `${k.map(i => `if((typeof ${i})[0]=="u"){var ${i}=I${runtimeId}.${i}}`).join("")}`;
                         try {
                             const f = await runCodeAtSpecial(
-                                `${jsx.serverImportCode};${beginCode[page]};${fn.code};return await ${fn.name}(...args${runtimeId})`,
-                                ["currentUUID", "currentClient", "...args" + runtimeId],
+                                `${jsx.serverImportCode};${beginCode[page](fnName)};${fn.code};${definer}return await ${fn.name}(...ARGS${runtimeId})`,
+                                ["currentUUID", "currentClient", "I" + runtimeId, "...ARGS" + runtimeId],
                                 path.join(this.#dir, config.srcFolder, socket._mainFile)
                             );
-                            if (f.success) res = await f.result.default(uuid, client, ...args);
+                            if (f.success) res = await f.result.default(uuid, client, identifierPk, ...args[0]);
                             else err = f.result;
                         } catch (e) {
                             err = e;
@@ -897,9 +902,6 @@ class API extends EventEmitter {
                 code,
                 functions: k.filter(i => !sr[i].r),
                 respondFunctions: k.filter(i => sr[i].r),
-                client: json.clientFunctionList,
-                clientLoad: json.clientLoadList,
-                clientNavigate: json.clientNavigateList,
                 importList: pkgL.map(i => [i, (this.#importMap[i] || {}).version || ""])
             }
         };
@@ -1018,7 +1020,7 @@ class API extends EventEmitter {
             }
             if (res.headersSent) return;
             pkJ = JSON.stringify(pk);
-            if (!this.dev) this.#builtJSXPage[l] = [files, pkJ];
+            this.#builtJSXPage[l] = [files, pkJ];
         }
         this.#clientPages[req._uuid] = [files, path.join(file).replaceAll("\\", "/")];
         this.watchFile(req._Route);
@@ -1042,6 +1044,7 @@ class API extends EventEmitter {
         // if (!file.endsWith(".html") && !file.endsWith(".jsx") && !file.endsWith(".tsx")) return; // todo: read bottom
         this.#watchingFiles[fN] = true;
         fs.watchFile(path.join(this.#dir, config.srcFolder, file), {interval: 1}, () => {
+            this.#builtJSXPage = {};
             for (const uuid in this.#clients) {
                 const client = this.#clients[uuid];
                 client._send(SERVER2CLIENT.FILE_REFRESH);
@@ -1172,7 +1175,7 @@ class API extends EventEmitter {
                     i = (i || "") + "";
                     const min = require("uglify-js").minify(i, {
                         compress: false // todo: don't disable compression completely, disable the needed options
-                        // the problem is that, minify(`(() => console.log(1); /* or anything else */ )`) -> { "code": "" }
+                        // the problem is that, minify(`(() => console.lg(1); /* or anything else */ )`) -> { "code": "" }
                     });
                     if (i) return min.code;
                     return "";
@@ -1662,63 +1665,76 @@ class API extends EventEmitter {
 
     // todo: maybe add an ability to set the connection timeout time for requests, like if it's far away increase it etc.
     async readClientJSX(file, jsxCode) {
-        if (file === config.main) return {
+        const json = {
             // throw "Cannot access the main file from the client side.";
             code: "",
             serverFunctions: {},
             clientFunctionList: [],
-            clientLoadList: [],
-            clientNavigateList: [],
             serverInit: [],
             joinEvent: [],
             leaveEvent: [],
             importList: [],
             fileImportList: [],
-            serverImportCode: ""
+            serverImportCode: "",
+            functionIdentifiers: {},
+            // serverFunctionDepths: {}
         };
-        const jsCode = this.jsxToJS(jsxCode, path.extname(file));
+        if (file === config.main) return json;
+        const jsCode = this.jsxToJS(jsxCode, path.extname(file), true);
         if (jsCode instanceof Error) throw jsCode;
         const ast = babelParser.parse(jsCode, {sourceType: "module"});
-
-        const json = {
-            serverFunctions: {},
-            clientFunctionList: [],
-            clientLoadList: [],
-            clientNavigateList: [],
-            serverInit: [],
-            joinEvent: [],
-            leaveEvent: [],
-            importList: [],
-            fileImportList: [],
-            serverImportCode: ""
-        };
-        let newJSCode = jsCode;
-        let deltaIndex = 0;
-        const replaceText = ({start, end}, text) => {
-            newJSCode = newJSCode.substring(0, start + deltaIndex) + text + newJSCode.substring(end + deltaIndex);
-            deltaIndex += start - end + text.length;
-        };
-        const impNm = {};
         const clip = ({start, end}) => jsCode.substring(start, end);
-        const fileJ = JSON.stringify(file);
-        const processFunction = (start, end, leadingComments, name, code, node) => {
-            let isClient = true;
-            for (const comment of leadingComments) {
+        const getDepth = path => {
+            let depth = 0;
+            while (path && path.node && path.node.type !== "Program") {
+                if (path.node.type === "FunctionDeclaration") depth++;
+                path = path.parentPath;
+            }
+            return depth;
+        };
+        const getIdentifiers = p => {
+            const identifiers = [];
+            p.traverse({
+                Identifier(p2) {
+                    if (!p2.node._isMember && !identifiers.includes(p2.node.name))
+                        identifiers.push(p2.node.name);
+                },
+                MemberExpression(p2) {
+                    p2.node.property._isMember = true;
+                }
+            });
+            return identifiers;
+        };
+        const processFunction = (leadingComments, name, code, p) => {
+            const all = [];
+            for (const comment of (leadingComments || [])) {
                 const lines = comment.value.split("\n");
                 for (const line of lines) {
                     const t = line.replaceAll("*", "").trim();
+                    if (t === "@client") {
+                        all.push(t);
+                        continue;
+                    }
                     const fH = this.functionDecorators[t];
                     if (fH) {
-                        if (t.startsWith("@server")) {
-                            node.__modified__ = true;
-                            isClient = false;
-                        }
-                        fH({start, end, name, leadingComments, code, json, replaceText});
+                        all.push(t);
+                        fH({name, leadingComments, code, json, pth: p, getIdentifiers, getDepth});
                     }
                 }
             }
-            // replaceText({start: end, end}, ";U" + runtimeId + `.${name}=${name};`); read the t-odo in the init function
-            if (isClient) json.clientFunctionList.push(name);
+            if (all.some(i => i.startsWith("@server"))) {
+                // something?
+            } else {
+                this.functionDecorators["@client"]({
+                    name,
+                    leadingComments,
+                    code,
+                    json,
+                    pth: p,
+                    getIdentifiers,
+                    getDepth
+                });
+            }
         };
         const actualProcessImport = (source, s) => {
             if (source.type !== "StringLiteral") return;
@@ -1729,155 +1745,48 @@ class API extends EventEmitter {
                 }
             } else if (!json.fileImportList.includes(source.value)) json.fileImportList.push(source.value);
         };
-        const processImport = (node, ad, th, sub) => {
-            actualProcessImport(node.source, `${ad.substring(0, ad.length - sub.length)}await Hizzy.getPkg(${th});`);
-        };
+        const awaitRpl = [];
         // todo: cache function instances somewhere and don't do Function()() everytime, to allow generator functions to work
         traverse(ast, {
-            FunctionDeclaration: ({node}) => {
-                const {leadingComments} = node;
-                if (!node.id) return;
-                processFunction(node.start, node.end, leadingComments || [], node.id.name, clip(node), node);
+            FunctionDeclaration: p => {
+                const {leadingComments, id} = p.node;
+                if (!id) return;
+                processFunction(leadingComments, id.name, clip(p.node), p);
             },
-            VariableDeclaration: ({node}) => {
-                const {declarations, leadingComments, kind} = node;
+            VariableDeclaration: p => {
+                const {declarations, leadingComments, kind} = p.node;
                 if (!declarations) return;
                 for (const dec of declarations) {
                     const {init} = dec;
-                    if (!init || !["ArrowFunctionExpression", "FunctionExpression"].includes(init.type)) continue;
-                    processFunction(dec.start - kind.length - 1, dec.end, leadingComments || [], dec.id.name, kind + " " + clip(dec), node);
+                    if (
+                        !init || ![
+                            "ArrowFunctionExpression", "FunctionExpression"
+                        ].includes(init.type)) continue;
+                    processFunction(leadingComments, dec.id.name, kind + " " + clip(dec), p);
                 }
             },
-            ImportDeclaration: ({node}) => {
-                if (node.type !== "ImportDeclaration") return;
-                let imN = clip(node.source);
-                // hizzy prefix:
-                let df = `await H${runtimeId}.I${runtimeId}(${imN},${fileJ});`;
-                if (!impNm[imN]) impNm[imN] = df;
-                let nc = "";
-                if (node.specifiers.length === 0) {
-                    if (impNm[imN] === df) {
-                        actualProcessImport(node.source);
-                        nc += df;
-                    }
-                } else {
-                    const specMap = {
-                        ImportDefaultSpecifier: [],
-                        ImportSpecifier: [],
-                        ImportNamespaceSpecifier: []
-                    };
-                    for (const specifier of node.specifiers) {
-                        const X = clip(specifier.local);
-                        const I = specifier.imported ? clip(specifier.imported) : X;
-                        specMap[specifier.type].push([X, I]);
-                    }
-                    if (specMap.ImportNamespaceSpecifier.length !== 0) {
-                        const N = specMap.ImportNamespaceSpecifier[0][0];
-                        const ad = `const ${N}=${impNm[imN]};`;
-                        nc += ad;
-                        processImport(node, ad, imN, impNm[imN] + ";");
-                        if (N.length < impNm[imN].length) impNm[imN] = N;
-                        for (let i = 1; i < specMap.ImportNamespaceSpecifier.length; i++) {
-                            const ad = `const ${specMap.ImportNamespaceSpecifier[i][0]}=${N};`;
-                            nc += ad;
-                            processImport(node, ad, imN, N + ";");
-                        }
-                    }
-                    if (specMap.ImportDefaultSpecifier.length !== 0) {
-                        const N = specMap.ImportDefaultSpecifier[0][0];
-                        const ad = `const{default:${N}}=${impNm[imN]};`;
-                        nc += ad;
-                        processImport(node, ad, imN, impNm[imN] + ";");
-                        for (let i = 1; i < specMap.ImportDefaultSpecifier.length; i++) {
-                            const ad = `const ${specMap.ImportDefaultSpecifier[i][0]}=${N};`;
-                            nc += ad;
-                            processImport(node, ad, imN, N + ";");
-                        }
-                    }
-                    if (specMap.ImportSpecifier.length !== 0) {
-                        const ad = `const{${specMap.ImportSpecifier.map(([X, I]) => X === I ? `${X}` : `${I}:${X}`).join(",")}}=${impNm[imN]};`;
-                        nc += ad;
-                        processImport(node, ad, imN, impNm[imN] + ";");
-                    }
+            CallExpression(p) {
+                const {callee, arguments: args} = p.node;
+                if (callee.type === "Identifier" && callee.name === "require" && args.length === 1) {
+                    awaitRpl.push(p);
+                    actualProcessImport(args[0]);
                 }
-                replaceText(node, nc);
-                /*import * as D from "./App2";
-                import A from "./App2"
-                import "./App2";
-                import {B,G} from "./App2";
-                import {B as H} from "./App2";
-                import("./App2")
-                import E, * as F from "./App2";*/
-            },
-            Import: n => {
-                if (n.parent.type !== "CallExpression") return;
-                if (n.parent.arguments.length >= 1) {
-                    if (n.findParent(path => path.container && path.container.__modified__)) return;
-                    const inside = clip(n.parent.arguments[0]);
-                    actualProcessImport(n.parent.arguments[0]);
-                    // hizzy prefix:
-                    replaceText(n.parent, impNm[inside] || `H${runtimeId}.I${runtimeId}(${inside},${fileJ})`);
-                }
-            },
-            ExportDefaultDeclaration: ({node}) => {
-                /*
-                export default [{Q: 1, L: [{}]}];
-                export default 1;
-                */
-                const text = clip(node.declaration);
-                // hizzy prefix:
-                replaceText(node, `H${runtimeId}.E${runtimeId}[${fileJ}].default=${text};`);
-            },
-            ExportNamedDeclaration: ({node}) => {
-                // hizzy prefix:
-                const st = `H${runtimeId}.E${runtimeId}[${fileJ}]`;
-                let nc = "";
-                if (node.declaration) {
-                    /*
-                    export const M = 1;
-                    export let L = 2, H = 1;
-                    export let [U, Y] = [1, 2];
-                    export var N = 1;
-                    */
-                    const kind = node.declaration.kind;
-                    for (const dec of node.declaration.declarations) {
-                        const init = clip(dec.init);
-                        if (dec.id.type === "Identifier") nc += `Object.defineProperty(${st},"${dec.id.name}",{get:()=>${init}});`;
-                        else {
-                            const ls = [];
-                            const ch = s => {
-                                if (s.type === "Identifier") return ls.push(s.name);
-                                if (s.type === "ArrayPattern") return s.elements.forEach(ch);
-                                if (s.type === "ObjectPattern") return s.properties.forEach(i => ch(i.value));
-                                exit("Not defined export.left type: " + s.type + ", please report this behavior.");
-                            };
-                            ch(dec.id);
-                            nc += `await (async()=>{let ${init}=${clip(dec.id)};${ls.map(i => kind === "const" ? `Object.defineProperty(${st},"${i}",{get:()=>${i}})` : `${st}.${i}=${i}`).join(";")}})();`;
-                        }
-                    }
-                } else {
-                    /*
-                    export {A, B};
-                    export {A as K};
-                    */
-                    for (const spec of node.specifiers) nc += `${st}.${clip(spec.local)}=${clip(spec.exported)};`;
-                }
-                replaceText(node, nc);
-            },
-            /*
-            ExportNamespaceSpecifier
-            ExportSpecifier
-            DeclareExportDeclaration
-            ExportAllDeclaration
-            DeclareExportAllDeclaration
-            ExportDefaultSpecifier
-            */
+            }
         });
-        if (json.serverImportCode) json.serverImportCode = `${json.serverImportCode}`;
-        const c = this.dev ? newJSCode : require("uglify-js").minify(newJSCode, {
+        awaitRpl.forEach(p => p.replaceWith({
+            type: "AwaitExpression",
+            argument: {
+                type: "CallExpression",
+                callee: p.node.callee,
+                arguments: p.node.arguments,
+            }
+        }));
+        json.clientFunctionList = [...new Set(json.clientFunctionList)];
+        const code = babelGenerator.default(ast).code;
+        const c = this.dev ? code : require("uglify-js").minify(code, {
             module: true,
-            compress: {toplevel: false},
-            keep_fnames: true
+            compress: {toplevel: true},
+            mangle: true
         });
         if (c.error) throw c.error;
         json.code = typeof c === "string" ? c : c.code;
@@ -1963,8 +1872,8 @@ class API extends EventEmitter {
         return this.#dir;
     };
 
-    makeClientFunction(file, name, uuid = null) {
-        return makeClientFunction(file, name, uuid);
+    makeClientFunction(file, name, uuid = null, fromFunction = null) {
+        return makeClientFunction(file, name, uuid, fromFunction);
     };
 
     getAddons() {
@@ -1979,7 +1888,7 @@ class API extends EventEmitter {
         return Object.keys(Addon.addons).find(i => Addon.addons[i].module.name === name);
     };
 
-    jsxToJS(jsx, extension) {
+    jsxToJS(jsx, extension, moduleConvert = false) {
         try {
             return babel.transformSync(jsx, {
                 filename: extension,
@@ -1989,7 +1898,10 @@ class API extends EventEmitter {
                         pragmaFrag: "F" + runtimeId
                     }],
                     ...(extension === ".tsx" ? [require("@babel/preset-typescript")] : [])
-                ] // todo: use real decorators
+                ], // todo: use real decorators
+                plugins: [
+                    ...(moduleConvert ? [require("@babel/plugin-transform-export-namespace-from"), require("@babel/plugin-transform-modules-commonjs")] : [])
+                ]
             }).code;
         } catch (e) {
             return e;

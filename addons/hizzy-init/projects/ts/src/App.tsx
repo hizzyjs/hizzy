@@ -1,25 +1,21 @@
 import {resolvePath, useState} from "hizzy";
 import "./App.css";
 
-// @server
-function addClick() {
-    const {set} = Hizzy.useGlobalState(null, 0);
-    set(v => v + 1);
-}
-
-// @server/respond
-async function getClicks() {
-    return Hizzy.useGlobalState(null, 0).get();
-}
-
 function Main() {
     const [count, setCount] = useState(0);
+    const setC = (v: number) => setCount(v);
+
+    // @server/respond
+    async function getClicks() {
+        return Hizzy.useGlobalState(null, 0).get();
+    }
     getClicks().then(setCount);
 
-    function onClick(event: MouseEvent | any) {
-        event.preventDefault();
-        addClick();
-        setCount(count + 1);
+    // @server
+    function onClick() {
+        const {get, set} = Hizzy.useGlobalState(null, 0);
+        set(v => v + 1);
+        setC.everyone(get());
     }
 
     return <div className="container">
