@@ -1,7 +1,7 @@
 {
   "name": "hizzy",
   "description": "Hizzy is a React based modern web framework!",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "main": "hizzy.min.js",
   "bin": {
     "hizzy": "hizzy.min.js"
