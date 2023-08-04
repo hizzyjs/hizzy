@@ -549,9 +549,9 @@ class API extends EventEmitter {
         const srvRpl = ({name, pth, json, getIdentifiers, tempName}) => {
             const identifiers = config.serverClientVariables ? getIdentifiers(pth) : null;
             json.functionIdentifiers[tempName] = identifiers;
-            pth.replaceWithMultiple(babelParser.parse(`const ${name}=FN${runtimeId}("${tempName}"` +
+            json.after.push(() => pth.replaceWithMultiple(babelParser.parse(`function ${name}(...args){return FN${runtimeId}("${tempName}",args` +
                 (identifiers && identifiers.length ? `,${JSON.stringify(identifiers)}.map(i=>eval(\`try{\${i}}catch(e){undefined}\`))` : "")
-                + `);SRH${runtimeId}("${tempName}",r=>eval(r));`).program.body);
+                + `);}SRH${runtimeId}("${tempName}",r=>eval(r));`).program.body));
         }
         this.functionDecorators["@server"] = ({name, pth, json, code, getIdentifiers}) => {
             const tempName = random();
@@ -1676,7 +1676,7 @@ class API extends EventEmitter {
             importList: [],
             fileImportList: [],
             serverImportCode: "",
-            functionIdentifiers: {},
+            functionIdentifiers: {}
             // serverFunctionDepths: {}
         };
         if (file === config.main) return json;
@@ -1745,7 +1745,7 @@ class API extends EventEmitter {
                 }
             } else if (!json.fileImportList.includes(source.value)) json.fileImportList.push(source.value);
         };
-        const awaitRpl = [];
+        json.after = [];
         // todo: cache function instances somewhere and don't do Function()() everytime, to allow generator functions to work
         traverse(ast, {
             FunctionDeclaration: p => {
@@ -1768,19 +1768,20 @@ class API extends EventEmitter {
             CallExpression(p) {
                 const {callee, arguments: args} = p.node;
                 if (callee.type === "Identifier" && callee.name === "require" && args.length === 1) {
-                    awaitRpl.push(p);
+                    json.after.push(() => p.replaceWith({
+                        type: "AwaitExpression",
+                        argument: {
+                            type: "CallExpression",
+                            callee: p.node.callee,
+                            arguments: p.node.arguments,
+                        }
+                    }));
                     actualProcessImport(args[0]);
                 }
             }
         });
-        awaitRpl.forEach(p => p.replaceWith({
-            type: "AwaitExpression",
-            argument: {
-                type: "CallExpression",
-                callee: p.node.callee,
-                arguments: p.node.arguments,
-            }
-        }));
+        json.after.forEach(i => i());
+        json.after = [];
         json.clientFunctionList = [...new Set(json.clientFunctionList)];
         const code = babelGenerator.default(ast).code;
         const c = this.dev ? code : require("uglify-js").minify(code, {
