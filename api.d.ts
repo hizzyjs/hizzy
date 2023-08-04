@@ -60,7 +60,8 @@ type HizzyConfiguration = {
         "jsx-injection"?: number,
         "static"?: Record<string, number> | number
     },
-    warnAboutTypes?: boolean
+    warnAboutTypes?: boolean,
+    serverClientVariables?: boolean
 };
 
 declare class AddonModule {

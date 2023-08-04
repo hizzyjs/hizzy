@@ -1,30 +1,26 @@
-import {useState} from "hizzy";
-import imgURL from "../assets/hizzy.svg";
+import {resolvePath, useState} from "hizzy";
 import "./App.css";
-
-// @server
-function addClick() {
-    const {set} = Hizzy.useGlobalState(null, 0);
-    set(v => v + 1);
-}
-
-// @server/respond
-function getClicks() {
-    return Hizzy.useGlobalState(null, 0).get();
-}
 
 function Main() {
     const [count, setCount] = useState(0);
+    const setC = v => setCount(v);
+
+    // @server/respond
+    async function getClicks() {
+        return Hizzy.useGlobalState(null, 0).get();
+    }
     getClicks().then(setCount);
 
-    function onClick(event) {
-        event.preventDefault();
-        addClick();
-        setCount(count + 1);
+    // @server
+    async function onClick() {
+        const {get, set} = Hizzy.useGlobalState(null, 0);
+        set(v => v + 1);
+        await setC.everyone(get());
     }
 
     return <div className="container">
-        <a href="https://hizzyjs.github.io/" target="_blank"><img src={imgURL} className="logo"
+        <a href="https://hizzyjs.github.io/" target="_blank"><img src={resolvePath("../assets/hizzy.svg")}
+                                                                  className="logo"
                                                                   alt="Hizzy Logo" draggable={false}/></a>
         <h1>Hizzy</h1>
         <button onClick={onClick} onContextMenu={onClick}>count is {count}</button>

@@ -257,7 +257,8 @@ if (isTerminal && args[0]) {
             "jsx-injection": 0,
             "static": {}
         },
-        warnAboutTypes: true
+        "warnAboutTypes": true,
+        "serverClientVariables": false // dangerous
         // todo: fix cache, it repeatedly refreshes the page for some reason, *sometimes*
     };
     let confFileName = _argv_.config;

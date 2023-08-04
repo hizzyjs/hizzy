@@ -30,7 +30,7 @@ const {CLIENT2SERVER, SERVER2CLIENT} = {
 const w = window;
 const d = document;
 const o = Object;
-const define = "defineProperty";
+const WK = o.keys(w); // todo: make it so window is refreshed when a navigation happens
 delete w["cookieStore"];
 d.querySelector("script[data-rm='" + R + "']").remove();
 const key = (document.cookie.split(';').map(i => i.trim()).find(i => i.startsWith("__hizzy__=")) || "").substring("__hizzy__=".length);
@@ -73,6 +73,7 @@ const messageHandler = {
         const code = spl.slice(1).join(":");
         try {
             const res = runCode(code, [
+                [`__hizzy_run${R}__2`, serverEvaluators],
                 [`__hizzy_run${R}__`, clientFunctions]
             ]);
             sendToSocket(CLIENT2SERVER.CLIENT_FUNCTION_RESPONSE + "0" + id + ":" + JSON.stringify(res));
@@ -127,7 +128,6 @@ let onHandshookSure;
 const handshookPromise = new Promise(r => onHandshook = r);
 const handshookSurePromise = new Promise(r => onHandshookSure = r);
 let loadPromise = new Promise(r => addEventListener("load", r));
-let clientFunctions = {};
 let _evalId = 0;
 const evalResponses = {};
 const runCode = (code, args = [], async = false) => {
@@ -146,6 +146,8 @@ let files = null;
 let exports = {};
 let hasExported = [];
 let fetchCache = {};
+let clientFunctions = {};
+let serverEvaluators = {};
 ///
 
 await handshookSurePromise;
@@ -153,8 +155,9 @@ const Hizzy = {};
 const __hooks = await import("http" + (isSecure ? "s" : "") + "://" + location.host + "/" + EXP + "/__hizzy__preact__hooks__");
 const __react = __hooks["React"];
 if (!__react) location.reload();
-const react = __react;
-Object.assign(Hizzy, __react, __hooks);
+const react = {};
+o.assign(Hizzy, __react, __hooks);
+o.assign(react, __react, __hooks);
 const ADDONS = await (await fetch("/" + R2 + "/__hizzy__addons__")).json();
 const rst = () => d.cookie = "__hizzy__=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
 const stb = () => d.cookie = "__hizzy__=" + key;
@@ -293,36 +296,37 @@ const import_ = async (f, _from, extra = []) => {
     if (isRaw) throw new Error("Cannot use the '?raw' on JSX/TSX files!");
     const getting = {normal: {}, load: {}, navigate: {}};
     await runCode(
-        file.code + ";" +
-        (f === mainFile ? [["client", "normal"], ["clientLoad", "load"], ["clientNavigate", "navigate"]].map(j =>
-            file[j[0]].map(i => `__hizzy_get${R}__.${j[1]}.${i}=typeof ${i}!="undefined"&&${i};`).join("")
-        ).join("") : ""),
-        [
+        file.code, [
+            ["exports", exports[fName]],
+            ["require", pkg => import_(pkg, fName)],
             ["R" + R2, (...a) => react.createElement(...a)],
             ["F" + R2, (...a) => react.Fragment(...a)],
             ["H" + R2, Hizzy],
             ["currentWebSocket", WebSocket],
-            ["FN" + R2, s => (...a) => runServerFunction(fName, s, a)],
-            ...(f === mainFile ? [["__hizzy_get" + R + "__", getting]] : []),
-            /*...(f === mainFile ? [
-                ["U" + R2, getting.normal],
-                ["UR" + R2, getting.load],
-                ["UE" + R2, getting.navigate]
-            ] : []),*/
+            ["CFN" + R2, getting], // client function
+            ["SRH" + R2, (name, fn) => serverEvaluators[name] = fn], // server evaluation handlers
+            ["FN" + R2, (s, identifiers) => {
+                /*if (identifiers) {
+                    identifiers = identifiers.map(i => {
+                        if (typeof i !== "function") return null;
+                        const temp = crypto.randomUUID();
+                        clientFunctionMap.set(temp, i);
+                        return temp;
+                    }); todo
+                }*/
+                return (...a) => {
+                    const id = ++_evalId;
+                    sendToSocket(CLIENT2SERVER.SERVER_FUNCTION_REQUEST + "" + id + ":" + fName + ":" + s + ":" + JSON.stringify([a, identifiers || []]));
+                    if (files[fName].respondFunctions.includes(s)) return new Promise(r => evalResponses[id] = r);
+                }
+            }],
             ...extra
         ], true);
     clientFunctions[fName] = getting;
     hasExported.push(fName);
     return exports[fName];
 };
-o[define](Hizzy, "E" + R2, {get: () => exports});
-o[define](Hizzy, "I" + R2, {get: () => (a, b) => import_(a, b)});
 for (const f in files) exports[f] = {};
-const runServerFunction = (page, func, args) => {
-    const id = ++_evalId;
-    sendToSocket(CLIENT2SERVER.SERVER_FUNCTION_REQUEST + "" + id + ":" + page + ":" + func + ":" + JSON.stringify(args));
-    if (files[page].respondFunctions.includes(func)) return new Promise(r => evalResponses[id] = r);
-};
 // todo: client can create workers, they should be terminated before a navigation, also assignments to `window` or any other global variable stay
 const addonExports = {};
 const doAddon = async (index, ...a) => {
@@ -422,7 +426,7 @@ let oldEnds = {};
 const baseHTML = d.documentElement.innerHTML;
 const loadPage = async file => {
     if (!firstRender) renderPromise = new Promise(r => onRender = r);
-    Object.values(oldEnds).forEach(i => i());
+    o.values(oldEnds).forEach(i => i());
     oldEnds = {};
     firstRender = false;
     d.documentElement.innerHTML = baseHTML;
@@ -432,6 +436,8 @@ const loadPage = async file => {
     exports = {};
     hasExported = [];
     fetchCache = {};
+    serverEvaluators = {};
+    clientFunctions = {};
     for (const f in files) exports[f] = {};
 
     try {
