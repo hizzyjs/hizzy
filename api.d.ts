@@ -4,8 +4,8 @@ import {Express, Request, Response} from "express";
 
 type Socket = Record<any, any>;
 type Method = "all" | "get" | "post" | "put" | "delete" | "patch" | "options" | "head";
-type SocketTraveler = string | number | null | SocketTraveler[] | {
-    [key: string | number | symbol | null]: SocketTraveler
+type SocketTraveler = string | number | boolean | null | SocketTraveler[] | {
+    [key: any]: SocketTraveler
 };
 type onRequestFunction<T> = (request: Request, response: Response, next: ((...args: any[]) => T), ...args: any[]) => any;
 type RoutesComponent = (props: { children?: RouteComponent | RouteComponent[] | any }) => any;

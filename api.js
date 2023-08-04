@@ -1515,6 +1515,7 @@ class API extends EventEmitter {
             json = await this.readClientJSX(file, code);
             data = json.code;
         }
+        // todo: make an online game with it
         this.#jsxFunctions[file] = json;
         const clientFunctions = json.clientFunctionList;
         inits.push(...await Promise.all(json.serverInit.map(async i => {
