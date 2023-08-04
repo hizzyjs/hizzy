@@ -667,7 +667,7 @@ class API extends EventEmitter {
                     const leaveEvents = jsx.leaveEvent;
                     (async () => { // it could break some functionality of _close() function, so I moved async to here
                         const f = await runCodeAtSpecial(
-                            `${jsx.serverImportCode};${beginCode[socket._mainFile]()};${leaveEvents.map(i => i.code).join(";")};${leaveEvents.map(i => `try{${i.name}()}catch(e){printer.raw.error(e)}`).join(";")}`,
+                            `${jsx.serverImportCode};${beginCode[socket._mainFile]()};${leaveEvents.map(i => `try{(${i.code})()}catch(e){printer.dev.error(e)}`).join("")}`,
                             ["currentUUID", "currentClient"],
                             path.join(this.#dir, config.srcFolder, socket._mainFile)
                         );
@@ -716,7 +716,7 @@ class API extends EventEmitter {
                 const jsx = socket._clientPages[socket._mainFile].json;
                 const joinEvents = jsx.joinEvent;
                 const f = await runCodeAtSpecial(
-                    `${jsx.serverImportCode};${beginCode[socket._mainFile]()};${joinEvents.map(i => i.code).join(";")};${joinEvents.map(i => `${i.name}()`).join(";")}`,
+                    `${jsx.serverImportCode};${beginCode[socket._mainFile]()};${joinEvents.map(i => `try{(${i.code})()}catch(e){printer.dev.error(e)}`).join("")}`,
                     ["currentUUID", "currentClient"],
                     path.join(this.#dir, config.srcFolder, socket._mainFile)
                 );
@@ -805,7 +805,7 @@ class API extends EventEmitter {
                         const definer = `${k.map(i => `if((typeof ${i})[0]=="u"){var ${i}=I${runtimeId}.${i}}`).join("")}`;
                         try {
                             const f = await runCodeAtSpecial(
-                                `${jsx.serverImportCode};${beginCode[page](fnName)};${fn.code};${definer}return await ${fn.name}(...ARGS${runtimeId})`,
+                                `${jsx.serverImportCode};${beginCode[page](fnName)};${definer}return await (${fn.code})(...ARGS${runtimeId})`,
                                 ["currentUUID", "currentClient", "I" + runtimeId, "...ARGS" + runtimeId],
                                 path.join(this.#dir, config.srcFolder, socket._mainFile)
                             );
@@ -1519,7 +1519,7 @@ class API extends EventEmitter {
         const clientFunctions = json.clientFunctionList;
         inits.push(...await Promise.all(json.serverInit.map(async i => {
             return (await runCodeAtSpecial(
-                `${json.serverImportCode};${makeBeginCode(null, clientFunctions, JSON.stringify(path.join(file)))}${i.code};${i.name}()`,
+                `${json.serverImportCode};${makeBeginCode(null, clientFunctions, JSON.stringify(path.join(file)))};(${i.code})()`,
                 [], path.join(this.#dir, config.srcFolder, file)
             )).result.default || (r => r);
         })));
