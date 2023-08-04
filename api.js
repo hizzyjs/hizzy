@@ -549,9 +549,12 @@ class API extends EventEmitter {
         const srvRpl = ({name, pth, json, getIdentifiers, tempName}) => {
             const identifiers = config.serverClientVariables ? getIdentifiers(pth) : null;
             json.functionIdentifiers[tempName] = identifiers;
-            json.after.push(() => pth.replaceWithMultiple(babelParser.parse(`function ${name}(...args){return FN${runtimeId}("${tempName}",args` +
-                (identifiers && identifiers.length ? `,${JSON.stringify(identifiers)}.map(i=>eval(\`try{\${i}}catch(e){undefined}\`))` : "")
-                + `);}SRH${runtimeId}("${tempName}",r=>eval(r));`).program.body));
+            json.after.push(() => {
+                pth.insertAfter(babelParser.parse(`function ${name}(...args){return FN${runtimeId}("${tempName}",args` +
+                    (identifiers && identifiers.length ? `,${JSON.stringify(identifiers)}.map(i=>eval(\`try{\${i}}catch(e){undefined}\`))` : "")
+                    + `);}SRH${runtimeId}("${tempName}",r=>eval(r));`));
+                pth.remove();
+            });
         }
         this.functionDecorators["@server"] = ({name, pth, json, code, getIdentifiers}) => {
             const tempName = random();
@@ -1755,7 +1758,7 @@ class API extends EventEmitter {
                 processFunction(leadingComments, id.name, clip(p.node), p);
             },
             VariableDeclaration: p => {
-                const {declarations, leadingComments, kind} = p.node;
+                const {declarations, leadingComments} = p.node;
                 if (!declarations) return;
                 for (const dec of declarations) {
                     const {init} = dec;
@@ -1763,7 +1766,7 @@ class API extends EventEmitter {
                         !init || ![
                             "ArrowFunctionExpression", "FunctionExpression"
                         ].includes(init.type)) continue;
-                    processFunction(leadingComments, dec.id.name, kind + " " + clip(dec), p);
+                    processFunction(leadingComments, dec.id.name, init.type === "FunctionExpression" ? clip(dec) : `(()=>${clip(dec).split("=").slice(1).join("=")})()`, p);
                 }
             },
             CallExpression(p) {
