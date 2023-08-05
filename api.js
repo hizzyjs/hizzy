@@ -1411,7 +1411,7 @@ class API extends EventEmitter {
             zip.file("runtime", runtimeId + "");
             zip.file("importMap", JSON.stringify(this.#importMap));
             const mainPath = path.join(this.#dir, config.srcFolder, config.main);
-            const code = this.jsxToJS(fs.readFileSync(mainPath), path.extname(config.main));
+            const code = this.jsxToJS(fs.readFileSync(mainPath), mainPath);
             if (code instanceof Error) return exit("Couldn't build the main file!", code);
             zip.file("main", code);
             if (this.#firstBuild) {
@@ -1553,7 +1553,7 @@ class API extends EventEmitter {
 
     async processDevMain() {
         const mainPath = path.join(this.#dir, config.srcFolder, config.main);
-        await this.processMain(this.jsxToJS(fs.readFileSync(mainPath), path.extname(mainPath)));
+        await this.processMain(this.jsxToJS(fs.readFileSync(mainPath), mainPath));
     };
 
     async processMain(data) {
@@ -1684,7 +1684,7 @@ class API extends EventEmitter {
             // serverFunctionDepths: {}
         };
         if (file === config.main) return json;
-        const jsCode = this.jsxToJS(jsxCode, path.extname(file), true);
+        const jsCode = this.jsxToJS(jsxCode, path.join(this.#dir, config.srcFolder, file), true);
         if (jsCode instanceof Error) throw jsCode;
         const ast = babelParser.parse(jsCode, {sourceType: "module"});
         const clip = ({start, end}) => jsCode.substring(start, end);
@@ -1893,16 +1893,16 @@ class API extends EventEmitter {
         return Object.keys(Addon.addons).find(i => Addon.addons[i].module.name === name);
     };
 
-    jsxToJS(jsx, extension, moduleConvert = false) {
+    jsxToJS(jsx, file, moduleConvert = false) {
         try {
             return babel.transformSync(jsx, {
-                filename: extension,
+                filename: file,
                 presets: [
                     [require("@babel/preset-react"), {
                         pragma: "R" + runtimeId,
                         pragmaFrag: "F" + runtimeId
                     }],
-                    ...(extension === ".tsx" ? [require("@babel/preset-typescript")] : [])
+                    ...(file.endsWith(".tsx") ? [require("@babel/preset-typescript")] : [])
                 ], // todo: use real decorators
                 plugins: [
                     ...(moduleConvert ? [require("@babel/plugin-transform-export-namespace-from"), require("@babel/plugin-transform-modules-commonjs")] : [])
