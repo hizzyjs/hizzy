@@ -295,7 +295,6 @@ const import_ = async (f, _from, extra = []) => {
     }
     if (isRaw) throw new Error("Cannot use the '?raw' on JSX/TSX files!");
     const getting = {normal: {}, load: {}, navigate: {}};
-    if (EXP) console.log(file.code);
     await runCode(
         file.code, [
             ["exports", exports[fName]],
