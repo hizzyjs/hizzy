@@ -39,13 +39,29 @@ const isSecure = location.protocol === "https:";
 const worker = new Worker(URL.createObjectURL(new Blob(["(" + (() => {
     let socket = new WebSocket("$R");
     const TIMEOUT = $T;
+    const KA = $P;
     socket.addEventListener("open", () => {
-        if (TIMEOUT > 0) setInterval(() => socket.send("$P"), TIMEOUT);
+        if (TIMEOUT > 0) setInterval(() => {
+            console.debug("> " + KA);
+            socket.send(KA.toString());
+        }, TIMEOUT);
     });
-    socket.addEventListener("close", () => postMessage(JSON.stringify({event: "close"})));
-    socket.addEventListener("error", () => postMessage(JSON.stringify({event: "error"})));
-    socket.addEventListener("message", e => postMessage(JSON.stringify({event: "message", data: e.data})))
-    addEventListener("message", e => socket.send(e.data));
+    socket.addEventListener("close", () => {
+        console.debug("closed");
+        postMessage(JSON.stringify({event: "close"}));
+    });
+    socket.addEventListener("error", e => {
+        console.debug("error", e);
+        postMessage(JSON.stringify({event: "error"}));
+    });
+    socket.addEventListener("message", e => {
+        console.debug("<", e.data);
+        postMessage(JSON.stringify({event: "message", data: e.data}));
+    });
+    addEventListener("message", e => {
+        console.debug("> " + e.data);
+        socket.send(e.data);
+    });
 }).toString()
     .replace("$R", "ws" + (isSecure ? "s" : "") + "://" + location.host)
     .replace("$P", CLIENT2SERVER.KEEPALIVE)

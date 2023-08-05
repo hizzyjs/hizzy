@@ -761,6 +761,7 @@ class API extends EventEmitter {
                         socket._send(SERVER2CLIENT.SURE_HANDSHAKE);
                         const pk = this.#startPacket[socket._uuid];
                         delete this.#startPacket[socket._uuid];
+                        onPageLoad();
                         if (pk) sendPagePayload(pk);
                         return;
                     }
